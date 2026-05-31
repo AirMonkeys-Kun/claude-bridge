@@ -1,0 +1,3338 @@
+{
+  "explored_dirs": [
+    "C:\\Users\\wsx\\AppData\\Local\\Claude-3p",
+    "C:\\Users\\wsx\\.claude"
+  ],
+  "all_files": [
+    {
+      "path": "local-agent-mode-sessions/",
+      "size": 0,
+      "type": "dir",
+      "items": 2
+    },
+    {
+      "path": "backups/",
+      "size": 0,
+      "type": "dir",
+      "items": 1
+    },
+    {
+      "path": "cache/",
+      "size": 0,
+      "type": "dir",
+      "items": 1
+    },
+    {
+      "path": "file-history/",
+      "size": 0,
+      "type": "dir",
+      "items": 7
+    },
+    {
+      "path": "ide/",
+      "size": 0,
+      "type": "dir",
+      "items": 2
+    },
+    {
+      "path": "plugins/",
+      "size": 0,
+      "type": "dir",
+      "items": 2
+    },
+    {
+      "path": "projects/",
+      "size": 0,
+      "type": "dir",
+      "items": 3
+    },
+    {
+      "path": "session-env/",
+      "size": 0,
+      "type": "dir",
+      "items": 2
+    },
+    {
+      "path": "sessions/",
+      "size": 0,
+      "type": "dir",
+      "items": 0
+    },
+    {
+      "path": "shell-snapshots/",
+      "size": 0,
+      "type": "dir",
+      "items": 4
+    },
+    {
+      "path": "skills/",
+      "size": 0,
+      "type": "dir",
+      "items": 25
+    },
+    {
+      "path": "telemetry/",
+      "size": 0,
+      "type": "dir",
+      "items": 11
+    },
+    {
+      "path": "history.jsonl",
+      "size": 4024,
+      "type": "file"
+    },
+    {
+      "path": "settings.json",
+      "size": 731,
+      "type": "file"
+    },
+    {
+      "path": "backups/.claude.json.backup.1778414080606",
+      "size": 3457,
+      "type": "file"
+    },
+    {
+      "path": "cache/changelog.md",
+      "size": 194907,
+      "type": "file"
+    },
+    {
+      "path": "ide/56956.lock",
+      "size": 197,
+      "type": "file"
+    },
+    {
+      "path": "ide/63948.lock",
+      "size": 158,
+      "type": "file"
+    },
+    {
+      "path": "plugins/known_marketplaces.json",
+      "size": 282,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official/.gitignore",
+      "size": 19,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official/README.md",
+      "size": 1948,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.claude-plugin/marketplace.json",
+      "size": 93309,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git/FETCH_HEAD",
+      "size": 96,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git/HEAD",
+      "size": 21,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git/ORIG_HEAD",
+      "size": 41,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git/config",
+      "size": 412,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git/description",
+      "size": 73,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git/index",
+      "size": 49783,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git/packed-refs",
+      "size": 112,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git/shallow",
+      "size": 41,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/applypatch-msg.sample",
+      "size": 478,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/commit-msg.sample",
+      "size": 896,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/fsmonitor-watchman.sample",
+      "size": 4726,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/post-update.sample",
+      "size": 189,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/pre-applypatch.sample",
+      "size": 424,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/pre-commit.sample",
+      "size": 1649,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/pre-merge-commit.sample",
+      "size": 416,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/pre-push.sample",
+      "size": 1374,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/pre-rebase.sample",
+      "size": 4898,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/pre-receive.sample",
+      "size": 544,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/prepare-commit-msg.sample",
+      "size": 1492,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/push-to-checkout.sample",
+      "size": 2783,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/sendemail-validate.sample",
+      "size": 2308,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\hooks/update.sample",
+      "size": 3650,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\info/exclude",
+      "size": 240,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\logs/HEAD",
+      "size": 363,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\objects\\pack/pack-4b2844c98cc672ead96a5e94c8f19574a073ecab.idx",
+      "size": 15632,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\objects\\pack/pack-4b2844c98cc672ead96a5e94c8f19574a073ecab.pack",
+      "size": 2258202,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\objects\\pack/pack-4b2844c98cc672ead96a5e94c8f19574a073ecab.rev",
+      "size": 2132,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\objects\\pack/pack-8802fc7e59bd5922cb75bded802dceef61505aae.idx",
+      "size": 4768,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\objects\\pack/pack-8802fc7e59bd5922cb75bded802dceef61505aae.pack",
+      "size": 70742,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\objects\\pack/pack-8802fc7e59bd5922cb75bded802dceef61505aae.rev",
+      "size": 580,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.git\\refs\\heads/main",
+      "size": 41,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\policy/prompt.md",
+      "size": 5033,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\policy/schema.json",
+      "size": 1972,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\scripts/discover_bumps.py",
+      "size": 8360,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\scripts/validate-frontmatter.ts",
+      "size": 7345,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\workflows/bump-plugin-shas.yml",
+      "size": 1134,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\workflows/close-external-prs.yml",
+      "size": 1604,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\workflows/scan-plugins.yml",
+      "size": 982,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\workflows/validate-frontmatter.yml",
+      "size": 1515,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\.github\\workflows/validate-plugins.yml",
+      "size": 905,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\asana/.mcp.json",
+      "size": 79,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\asana\\.claude-plugin/plugin.json",
+      "size": 276,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\context7/.mcp.json",
+      "size": 90,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\context7\\.claude-plugin/plugin.json",
+      "size": 262,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord/.mcp.json",
+      "size": 165,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord/.npmrc",
+      "size": 37,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord/ACCESS.md",
+      "size": 6599,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord/LICENSE",
+      "size": 11344,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord/README.md",
+      "size": 4904,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord/bun.lock",
+      "size": 23966,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord/package.json",
+      "size": 306,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord/server.ts",
+      "size": 33549,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\discord\\.claude-plugin/plugin.json",
+      "size": 290,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\fakechat/.mcp.json",
+      "size": 166,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\fakechat/.npmrc",
+      "size": 37,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\fakechat/LICENSE",
+      "size": 11344,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\fakechat/README.md",
+      "size": 1308,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\fakechat/bun.lock",
+      "size": 19317,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\fakechat/package.json",
+      "size": 333,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\fakechat/server.ts",
+      "size": 10547,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\fakechat\\.claude-plugin/plugin.json",
+      "size": 300,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\firebase/.mcp.json",
+      "size": 97,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\firebase\\.claude-plugin/plugin.json",
+      "size": 281,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\github/.mcp.json",
+      "size": 178,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\github\\.claude-plugin/plugin.json",
+      "size": 271,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\gitlab/.mcp.json",
+      "size": 85,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\gitlab\\.claude-plugin/plugin.json",
+      "size": 254,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\greptile/.mcp.json",
+      "size": 162,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\greptile/README.md",
+      "size": 1914,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\greptile\\.claude-plugin/plugin.json",
+      "size": 357,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage/.mcp.json",
+      "size": 166,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage/.npmrc",
+      "size": 37,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage/ACCESS.md",
+      "size": 6764,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage/LICENSE",
+      "size": 11344,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage/README.md",
+      "size": 4442,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage/bun.lock",
+      "size": 19345,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage/package.json",
+      "size": 355,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage/server.ts",
+      "size": 32245,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\imessage\\.claude-plugin/plugin.json",
+      "size": 319,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\laravel-boost/.mcp.json",
+      "size": 88,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\laravel-boost\\.claude-plugin/plugin.json",
+      "size": 295,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\linear/.mcp.json",
+      "size": 82,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\linear\\.claude-plugin/plugin.json",
+      "size": 279,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\playwright/.mcp.json",
+      "size": 87,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\playwright\\.claude-plugin/plugin.json",
+      "size": 295,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\serena/.mcp.json",
+      "size": 137,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\serena\\.claude-plugin/plugin.json",
+      "size": 254,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram/.mcp.json",
+      "size": 166,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram/.npmrc",
+      "size": 37,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram/ACCESS.md",
+      "size": 7075,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram/LICENSE",
+      "size": 11344,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram/README.md",
+      "size": 4494,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram/bun.lock",
+      "size": 20129,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram/package.json",
+      "size": 302,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram/server.ts",
+      "size": 39746,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\telegram\\.claude-plugin/plugin.json",
+      "size": 294,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\terraform/.mcp.json",
+      "size": 192,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\external_plugins\\terraform\\.claude-plugin/plugin.json",
+      "size": 274,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\agent-sdk-dev/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\agent-sdk-dev/README.md",
+      "size": 6397,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\agent-sdk-dev\\.claude-plugin/plugin.json",
+      "size": 167,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\agent-sdk-dev\\agents/agent-sdk-verifier-py.md",
+      "size": 5206,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\agent-sdk-dev\\agents/agent-sdk-verifier-ts.md",
+      "size": 5419,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\agent-sdk-dev\\commands/new-sdk-app.md",
+      "size": 7846,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\clangd-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\clangd-lsp/README.md",
+      "size": 780,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-code-setup/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-code-setup/README.md",
+      "size": 1015,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-code-setup/automation-recommender-example.png",
+      "size": 545204,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-code-setup\\.claude-plugin/plugin.json",
+      "size": 273,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-md-management/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-md-management/README.md",
+      "size": 1084,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-md-management/claude-md-improver-example.png",
+      "size": 518778,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-md-management/revise-claude-md-example.png",
+      "size": 555521,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-md-management\\.claude-plugin/plugin.json",
+      "size": 283,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\claude-md-management\\commands/revise-claude-md.md",
+      "size": 1357,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization/README.md",
+      "size": 5333,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\.claude-plugin/plugin.json",
+      "size": 335,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\agents/architecture-critic.md",
+      "size": 1673,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\agents/business-rules-extractor.md",
+      "size": 2179,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\agents/legacy-analyst.md",
+      "size": 2026,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\agents/security-auditor.md",
+      "size": 1927,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\agents/test-engineer.md",
+      "size": 1787,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\commands/modernize-assess.md",
+      "size": 5657,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\commands/modernize-brief.md",
+      "size": 2093,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\commands/modernize-extract-rules.md",
+      "size": 2719,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\commands/modernize-harden.md",
+      "size": 1573,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\commands/modernize-map.md",
+      "size": 2822,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\commands/modernize-reimagine.md",
+      "size": 3740,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-modernization\\commands/modernize-transform.md",
+      "size": 3031,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-review/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-review/README.md",
+      "size": 7321,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-review\\.claude-plugin/plugin.json",
+      "size": 234,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-review\\commands/code-review.md",
+      "size": 7422,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-simplifier/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-simplifier\\.claude-plugin/plugin.json",
+      "size": 271,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\code-simplifier\\agents/code-simplifier.md",
+      "size": 3129,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\commit-commands/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\commit-commands/README.md",
+      "size": 5908,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\commit-commands\\.claude-plugin/plugin.json",
+      "size": 236,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\commit-commands\\commands/clean_gone.md",
+      "size": 1865,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\commit-commands\\commands/commit-push-pr.md",
+      "size": 796,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\commit-commands\\commands/commit.md",
+      "size": 624,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\csharp-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\csharp-lsp/README.md",
+      "size": 486,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\cwc-makers/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\cwc-makers/README.md",
+      "size": 1941,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\cwc-makers\\.claude-plugin/plugin.json",
+      "size": 649,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\cwc-makers\\commands/maker-setup.md",
+      "size": 1396,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\example-plugin/.mcp.json",
+      "size": 91,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\example-plugin/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\example-plugin/README.md",
+      "size": 1881,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\example-plugin\\.claude-plugin/plugin.json",
+      "size": 270,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\example-plugin\\commands/example-command.md",
+      "size": 1247,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\explanatory-output-style/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\explanatory-output-style/README.md",
+      "size": 2470,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\explanatory-output-style\\.claude-plugin/plugin.json",
+      "size": 290,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\explanatory-output-style\\hooks/hooks.json",
+      "size": 323,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\explanatory-output-style\\hooks-handlers/session-start.sh",
+      "size": 1468,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\feature-dev/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\feature-dev/README.md",
+      "size": 11697,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\feature-dev\\.claude-plugin/plugin.json",
+      "size": 262,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\feature-dev\\agents/code-architect.md",
+      "size": 2259,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\feature-dev\\agents/code-explorer.md",
+      "size": 2115,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\feature-dev\\agents/code-reviewer.md",
+      "size": 2994,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\feature-dev\\commands/feature-dev.md",
+      "size": 5097,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\frontend-design/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\frontend-design/README.md",
+      "size": 977,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\frontend-design\\.claude-plugin/plugin.json",
+      "size": 180,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\gopls-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\gopls-lsp/README.md",
+      "size": 473,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify/.gitignore",
+      "size": 291,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify/README.md",
+      "size": 7710,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\.claude-plugin/plugin.json",
+      "size": 210,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\agents/conversation-analyzer.md",
+      "size": 5625,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\commands/configure.md",
+      "size": 2863,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\commands/help.md",
+      "size": 4624,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\commands/hookify.md",
+      "size": 7667,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\commands/list.md",
+      "size": 2020,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\core/__init__.py",
+      "size": 0,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\core/config_loader.py",
+      "size": 9690,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\core/rule_engine.py",
+      "size": 10711,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\examples/console-log-warning.local.md",
+      "size": 315,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\examples/dangerous-rm.local.md",
+      "size": 278,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\examples/require-tests-stop.local.md",
+      "size": 500,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\examples/sensitive-files-warning.local.md",
+      "size": 421,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\hooks/__init__.py",
+      "size": 0,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\hooks/hooks.json",
+      "size": 1020,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\hooks/posttooluse.py",
+      "size": 1622,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\hooks/pretooluse.py",
+      "size": 1852,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\hooks/stop.py",
+      "size": 1403,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\hooks/userpromptsubmit.py",
+      "size": 1389,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\matchers/__init__.py",
+      "size": 0,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\hookify\\utils/__init__.py",
+      "size": 0,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\jdtls-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\jdtls-lsp/README.md",
+      "size": 811,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\kotlin-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\kotlin-lsp/README.md",
+      "size": 306,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\learning-output-style/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\learning-output-style/README.md",
+      "size": 4687,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\learning-output-style\\.claude-plugin/plugin.json",
+      "size": 295,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\learning-output-style\\hooks/hooks.json",
+      "size": 320,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\learning-output-style\\hooks-handlers/session-start.sh",
+      "size": 3564,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\lua-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\lua-lsp/README.md",
+      "size": 705,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\math-olympiad/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\math-olympiad/README.md",
+      "size": 1192,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\math-olympiad\\.claude-plugin/plugin.json",
+      "size": 356,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\mcp-server-dev/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\mcp-server-dev/README.md",
+      "size": 1547,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\mcp-server-dev\\.claude-plugin/plugin.json",
+      "size": 334,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\php-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\php-lsp/README.md",
+      "size": 436,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\playground/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\playground/README.md",
+      "size": 1258,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\playground\\.claude-plugin/plugin.json",
+      "size": 277,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\plugin-dev/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\plugin-dev/README.md",
+      "size": 14590,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\plugin-dev\\.claude-plugin/plugin.json",
+      "size": 267,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\plugin-dev\\agents/agent-creator.md",
+      "size": 7488,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\plugin-dev\\agents/plugin-validator.md",
+      "size": 6678,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\plugin-dev\\agents/skill-reviewer.md",
+      "size": 6132,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\plugin-dev\\commands/create-plugin.md",
+      "size": 15855,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit/README.md",
+      "size": 7528,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit\\.claude-plugin/plugin.json",
+      "size": 266,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit\\agents/code-reviewer.md",
+      "size": 3635,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit\\agents/code-simplifier.md",
+      "size": 5292,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit\\agents/comment-analyzer.md",
+      "size": 4925,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit\\agents/pr-test-analyzer.md",
+      "size": 4560,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit\\agents/silent-failure-hunter.md",
+      "size": 7807,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit\\agents/type-design-analyzer.md",
+      "size": 4999,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pr-review-toolkit\\commands/review-pr.md",
+      "size": 4997,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pyright-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\pyright-lsp/README.md",
+      "size": 564,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop/README.md",
+      "size": 6054,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop\\.claude-plugin/plugin.json",
+      "size": 343,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop\\commands/cancel-ralph.md",
+      "size": 738,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop\\commands/help.md",
+      "size": 3227,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop\\commands/ralph-loop.md",
+      "size": 916,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop\\hooks/hooks.json",
+      "size": 291,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop\\hooks/stop-hook.sh",
+      "size": 7533,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ralph-loop\\scripts/setup-ralph-loop.sh",
+      "size": 7044,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ruby-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\ruby-lsp/README.md",
+      "size": 535,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\rust-analyzer-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\rust-analyzer-lsp/README.md",
+      "size": 701,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\security-guidance/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\security-guidance\\.claude-plugin/plugin.json",
+      "size": 280,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\security-guidance\\hooks/hooks.json",
+      "size": 382,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\security-guidance\\hooks/security_reminder_hook.py",
+      "size": 10767,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\session-report/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\skill-creator/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\skill-creator/README.md",
+      "size": 264,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\skill-creator\\.claude-plugin/plugin.json",
+      "size": 378,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\swift-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\swift-lsp/README.md",
+      "size": 602,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\typescript-lsp/LICENSE",
+      "size": 11358,
+      "type": "file"
+    },
+    {
+      "path": "plugins\\marketplaces\\claude-plugins-official\\plugins\\typescript-lsp/README.md",
+      "size": 692,
+      "type": "file"
+    },
+    {
+      "path": "projects\\c--Users-wsx-Documents-SmartAgent/654acc0c-634c-49ea-ad1d-96f5c4b3d59e.jsonl",
+      "size": 417436,
+      "type": "file"
+    },
+    {
+      "path": "projects\\c--Users-wsx-Documents-SmartAgent/b63a0cc9-c0d0-4398-b0a5-614adf174f29.jsonl",
+      "size": 691424,
+      "type": "file"
+    },
+    {
+      "path": "projects\\c--Users-wsx-Documents-SmartAgent/f01a80b0-4fb1-44bd-9405-7b913f0132c4.jsonl",
+      "size": 679500,
+      "type": "file"
+    },
+    {
+      "path": "projects\\C--Users-wsx-Documents-SmartAgent--claude-worktrees-competent-snyder-543a70/db19d060-ae8f-4080-87ce-01fb2a8d37a1.jsonl",
+      "size": 261495,
+      "type": "file"
+    },
+    {
+      "path": "projects\\C--Users-wsx-Documents-SmartAgent--claude-worktrees-elated-nightingale-173bfc/3938504f-9aa8-49e0-8a00-86865e9f2d11.jsonl",
+      "size": 561019,
+      "type": "file"
+    },
+    {
+      "path": "shell-snapshots/snapshot-bash-1776103532806-ptbi8n.sh",
+      "size": 4036,
+      "type": "file"
+    },
+    {
+      "path": "shell-snapshots/snapshot-bash-1776248313369-nub2yp.sh",
+      "size": 4094,
+      "type": "file"
+    },
+    {
+      "path": "shell-snapshots/snapshot-bash-1778414090048-guxvs5.sh",
+      "size": 2760,
+      "type": "file"
+    },
+    {
+      "path": "shell-snapshots/snapshot-bash-1778414228741-9nvenh.sh",
+      "size": 2760,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-approval/SKILL.md",
+      "size": 1705,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-attendance/SKILL.md",
+      "size": 1620,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base/SKILL.md",
+      "size": 37081,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/dashboard-block-data-config.md",
+      "size": 12243,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/examples.md",
+      "size": 3173,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/formula-field-guide.md",
+      "size": 55705,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-advperm-disable.md",
+      "size": 2178,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-advperm-enable.md",
+      "size": 2002,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-base-copy.md",
+      "size": 2717,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-base-create.md",
+      "size": 2409,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-base-get.md",
+      "size": 975,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-cell-value.md",
+      "size": 5021,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-arrange.md",
+      "size": 2138,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-block-create.md",
+      "size": 3659,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-block-delete.md",
+      "size": 1008,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-block-get.md",
+      "size": 1767,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-block-list.md",
+      "size": 1521,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-block-update.md",
+      "size": 3111,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-create.md",
+      "size": 1782,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-delete.md",
+      "size": 1024,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-get.md",
+      "size": 1674,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-list.md",
+      "size": 1499,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard-update.md",
+      "size": 1559,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-dashboard.md",
+      "size": 11073,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-data-analysis-sop.md",
+      "size": 6751,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-data-query.md",
+      "size": 19200,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-field-create.md",
+      "size": 3606,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-field-delete.md",
+      "size": 1322,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-field-get.md",
+      "size": 904,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-field-list.md",
+      "size": 992,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-field-search-options.md",
+      "size": 1240,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-field-update.md",
+      "size": 7100,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-field.md",
+      "size": 1319,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-create.md",
+      "size": 2509,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-delete.md",
+      "size": 1581,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-get.md",
+      "size": 1633,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-list.md",
+      "size": 1956,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-questions-create.md",
+      "size": 4537,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-questions-delete.md",
+      "size": 1853,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-questions-list.md",
+      "size": 2008,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-questions-update.md",
+      "size": 2874,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-questions.md",
+      "size": 1056,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form-update.md",
+      "size": 2190,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-form.md",
+      "size": 1028,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-history.md",
+      "size": 630,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-record-batch-create.md",
+      "size": 2114,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-record-batch-update.md",
+      "size": 2173,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-record-delete.md",
+      "size": 1815,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-record-history-list.md",
+      "size": 2938,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-record-share-link-create.md",
+      "size": 1976,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-record-upsert.md",
+      "size": 2402,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-record.md",
+      "size": 2521,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-role-create.md",
+      "size": 3331,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-role-delete.md",
+      "size": 2162,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-role-get.md",
+      "size": 2729,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-role-list.md",
+      "size": 2477,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-role-update.md",
+      "size": 2872,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-shortcut-field-properties.md",
+      "size": 11945,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-table-create.md",
+      "size": 1722,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-table-delete.md",
+      "size": 1347,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-table-get.md",
+      "size": 1338,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-table-list.md",
+      "size": 948,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-table-update.md",
+      "size": 1004,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-table.md",
+      "size": 1034,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-create.md",
+      "size": 1477,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-delete.md",
+      "size": 976,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-get-card.md",
+      "size": 791,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-get-filter.md",
+      "size": 797,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-get-group.md",
+      "size": 794,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-get-sort.md",
+      "size": 791,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-get-timebar.md",
+      "size": 806,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-get-visible-fields.md",
+      "size": 684,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-get.md",
+      "size": 794,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-list.md",
+      "size": 957,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-rename.md",
+      "size": 932,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-set-card.md",
+      "size": 1247,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-set-filter.md",
+      "size": 3887,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-set-group.md",
+      "size": 1752,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-set-sort.md",
+      "size": 1580,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-set-timebar.md",
+      "size": 1442,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view-set-visible-fields.md",
+      "size": 1304,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-view.md",
+      "size": 2692,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow-create.md",
+      "size": 8008,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow-disable.md",
+      "size": 2877,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow-enable.md",
+      "size": 2872,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow-get.md",
+      "size": 5683,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow-guide.md",
+      "size": 22854,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow-list.md",
+      "size": 4414,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow-schema.md",
+      "size": 33746,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow-update.md",
+      "size": 6775,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workflow.md",
+      "size": 1734,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lark-base-workspace.md",
+      "size": 684,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/lookup-field-guide.md",
+      "size": 18838,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-base\\references/role-config.md",
+      "size": 20427,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar/SKILL.md",
+      "size": 14330,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar\\references/lark-calendar-agenda.md",
+      "size": 2313,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar\\references/lark-calendar-create.md",
+      "size": 5155,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar\\references/lark-calendar-freebusy.md",
+      "size": 3855,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar\\references/lark-calendar-room-find.md",
+      "size": 9279,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar\\references/lark-calendar-rsvp.md",
+      "size": 1358,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar\\references/lark-calendar-schedule-meeting.md",
+      "size": 18837,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar\\references/lark-calendar-suggestion.md",
+      "size": 7196,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-calendar\\references/lark-calendar-update.md",
+      "size": 6483,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-contact/SKILL.md",
+      "size": 2466,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-contact\\references/lark-contact-get-user.md",
+      "size": 625,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-contact\\references/lark-contact-search-user.md",
+      "size": 5390,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc/SKILL.md",
+      "size": 7731,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-create.md",
+      "size": 5461,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-fetch.md",
+      "size": 8566,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-md.md",
+      "size": 5104,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-media-download.md",
+      "size": 2169,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-media-insert.md",
+      "size": 6944,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-media-preview.md",
+      "size": 1647,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-search.md",
+      "size": 14792,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-update.md",
+      "size": 12548,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-whiteboard.md",
+      "size": 5155,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references/lark-doc-xml.md",
+      "size": 8250,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references\\style/lark-doc-create-workflow.md",
+      "size": 3728,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references\\style/lark-doc-style.md",
+      "size": 6897,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-doc\\references\\style/lark-doc-update-workflow.md",
+      "size": 4722,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive/SKILL.md",
+      "size": 25225,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-add-comment.md",
+      "size": 9474,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-apply-permission.md",
+      "size": 3605,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-create-folder.md",
+      "size": 3618,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-create-shortcut.md",
+      "size": 4332,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-delete.md",
+      "size": 2655,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-download.md",
+      "size": 755,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-export-download.md",
+      "size": 1515,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-export.md",
+      "size": 3607,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-import.md",
+      "size": 8678,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-inspect.md",
+      "size": 1850,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-move.md",
+      "size": 4647,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-pull.md",
+      "size": 9654,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-push.md",
+      "size": 14348,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-reactions.md",
+      "size": 6271,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-search.md",
+      "size": 14836,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-status.md",
+      "size": 7464,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-task-result.md",
+      "size": 10924,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-upload.md",
+      "size": 5067,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-version-delete.md",
+      "size": 1022,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-version-get.md",
+      "size": 2042,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-version-history.md",
+      "size": 1890,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-drive\\references/lark-drive-version-revert.md",
+      "size": 957,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-event/SKILL.md",
+      "size": 7725,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-event\\references/lark-event-im.md",
+      "size": 4255,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im/SKILL.md",
+      "size": 11320,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-chat-create.md",
+      "size": 7996,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-chat-identity.md",
+      "size": 3210,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-chat-list.md",
+      "size": 4675,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-chat-messages-list.md",
+      "size": 8098,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-chat-search.md",
+      "size": 7119,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-chat-update.md",
+      "size": 3281,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-flag-cancel.md",
+      "size": 2795,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-flag-create.md",
+      "size": 2707,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-flag-list.md",
+      "size": 3846,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-messages-mget.md",
+      "size": 3449,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-messages-reply.md",
+      "size": 10933,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-messages-resources-download.md",
+      "size": 4845,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-messages-search.md",
+      "size": 13190,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-messages-send.md",
+      "size": 12083,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-reactions.md",
+      "size": 9941,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-im\\references/lark-im-threads-messages-list.md",
+      "size": 4830,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail/SKILL.md",
+      "size": 38965,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-decline-receipt.md",
+      "size": 4097,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-draft-create.md",
+      "size": 7659,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-draft-edit.md",
+      "size": 17191,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-forward.md",
+      "size": 11791,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-message.md",
+      "size": 9774,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-messages.md",
+      "size": 4446,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-reply-all.md",
+      "size": 10717,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-reply.md",
+      "size": 12450,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-send-receipt.md",
+      "size": 6188,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-send.md",
+      "size": 11891,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-share-to-chat.md",
+      "size": 3064,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-signature.md",
+      "size": 2737,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-template-create.md",
+      "size": 5764,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-template-update.md",
+      "size": 5943,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-thread.md",
+      "size": 4348,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-triage.md",
+      "size": 5302,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-mail\\references/lark-mail-watch.md",
+      "size": 4938,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-markdown/SKILL.md",
+      "size": 2843,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-markdown\\references/lark-markdown-create.md",
+      "size": 2908,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-markdown\\references/lark-markdown-fetch.md",
+      "size": 1767,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-markdown\\references/lark-markdown-overwrite.md",
+      "size": 2280,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-markdown\\references/lark-markdown-patch.md",
+      "size": 4213,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-minutes/SKILL.md",
+      "size": 10339,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-minutes\\references/lark-minutes-download.md",
+      "size": 5706,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-minutes\\references/lark-minutes-search.md",
+      "size": 11345,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-minutes\\references/lark-minutes-upload.md",
+      "size": 4405,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr/SKILL.md",
+      "size": 6254,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-contentblock.md",
+      "size": 9542,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-cycle-detail.md",
+      "size": 2534,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-cycle-list.md",
+      "size": 3744,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-entities.md",
+      "size": 20629,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-image-upload.md",
+      "size": 3473,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-progress-create.md",
+      "size": 5174,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-progress-delete.md",
+      "size": 1459,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-progress-get.md",
+      "size": 2190,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-progress-list.md",
+      "size": 3236,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-okr\\references/lark-okr-progress-update.md",
+      "size": 4266,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-openapi-explorer/SKILL.md",
+      "size": 4927,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-shared/SKILL.md",
+      "size": 6520,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets/SKILL.md",
+      "size": 16949,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-cell-data.md",
+      "size": 5457,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-cell-images.md",
+      "size": 1822,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-cell-style-and-merge.md",
+      "size": 3700,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-dropdown.md",
+      "size": 3790,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-filter-views.md",
+      "size": 5741,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-float-images.md",
+      "size": 3457,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-formula.md",
+      "size": 3547,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-row-column-management.md",
+      "size": 4764,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-sheet-management.md",
+      "size": 5132,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-sheets\\references/lark-sheets-spreadsheet-management.md",
+      "size": 3925,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-skill-maker/SKILL.md",
+      "size": 2460,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides/SKILL.md",
+      "size": 20234,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/administration--all_hands_meeting.xml",
+      "size": 106439,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/administration--annual_gala.xml",
+      "size": 63786,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/administration--company_intro.xml",
+      "size": 67200,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/administration--corporate_culture.xml",
+      "size": 86391,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/hr--employee_training.xml",
+      "size": 52920,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/hr--employee_training_workshop.xml",
+      "size": 71315,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/hr--onboarding.xml",
+      "size": 43081,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/marketing--brand_communication.xml",
+      "size": 69922,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/marketing--brand_logo_design.xml",
+      "size": 69810,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/marketing--brand_operations_plan.xml",
+      "size": 64181,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/marketing--business_plan.xml",
+      "size": 82399,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/marketing--marketing_plan.xml",
+      "size": 73595,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/marketing--marketing_strategy.xml",
+      "size": 73786,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/marketing--product_whitepaper.xml",
+      "size": 75560,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/marketing--roadshow_business_plan.xml",
+      "size": 76526,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/misc--book_sharing.xml",
+      "size": 71212,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/misc--club_event_plan.xml",
+      "size": 209311,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/misc--student_career_plan.xml",
+      "size": 84535,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/office--dark_general.xml",
+      "size": 203134,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/office--dept_annual_report.xml",
+      "size": 64530,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/office--light_general.xml",
+      "size": 187635,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/office--project_kickoff.xml",
+      "size": 151634,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/office--quarterly_review.xml",
+      "size": 59125,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/office--work_report.xml",
+      "size": 55132,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/office--work_summary.xml",
+      "size": 219825,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/office--work_summary_report.xml",
+      "size": 72191,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/operations--brand_logo_design.xml",
+      "size": 69810,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/operations--brand_operations_plan.xml",
+      "size": 64181,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/operations--marketing_plan.xml",
+      "size": 73595,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/operations--product_promotion.xml",
+      "size": 32160,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/personal--experience_sharing.xml",
+      "size": 113056,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/personal--personal_resume.xml",
+      "size": 99603,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/personal--promotion_defense.xml",
+      "size": 54086,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/personal--promotion_report.xml",
+      "size": 53433,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/personal--self_intro.xml",
+      "size": 32467,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/personal--teaching_sharing.xml",
+      "size": 155918,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/product--business_case_analysis.xml",
+      "size": 67670,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/product--market_analysis.xml",
+      "size": 42690,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/product--product_analysis.xml",
+      "size": 76859,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/product--product_intro.xml",
+      "size": 149220,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/product--product_promotion.xml",
+      "size": 32160,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\assets\\templates/product--product_promotion_2.xml",
+      "size": 32160,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/asset-planning.md",
+      "size": 6139,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/examples.md",
+      "size": 8657,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-create.md",
+      "size": 7120,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-edit-workflows.md",
+      "size": 7257,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-media-upload.md",
+      "size": 5652,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-replace-slide.md",
+      "size": 11756,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-xml-presentation-slide-create.md",
+      "size": 8525,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-xml-presentation-slide-delete.md",
+      "size": 3934,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-xml-presentation-slide-get.md",
+      "size": 3422,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-xml-presentation-slide-replace.md",
+      "size": 7069,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/lark-slides-xml-presentations-get.md",
+      "size": 2895,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/planning-layer.md",
+      "size": 13058,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/slide-templates.md",
+      "size": 9333,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/slides_demo.xml",
+      "size": 12167,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/slides_xml_schema_definition.xml",
+      "size": 170136,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/template-catalog.md",
+      "size": 27259,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/template-index.json",
+      "size": 51774,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/troubleshooting.md",
+      "size": 5619,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/validation-checklist.md",
+      "size": 4977,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/visual-planning.md",
+      "size": 13721,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/xml-format-guide.md",
+      "size": 9097,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\references/xml-schema-quick-ref.md",
+      "size": 5991,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\scripts/template_tool.py",
+      "size": 37124,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\scripts/template_tool_test.py",
+      "size": 7604,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\scripts/xml_text_overlap_lint.py",
+      "size": 13552,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-slides\\scripts/xml_text_overlap_lint_test.py",
+      "size": 11413,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task/SKILL.md",
+      "size": 10223,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-assign.md",
+      "size": 1399,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-comment.md",
+      "size": 902,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-complete.md",
+      "size": 740,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-create.md",
+      "size": 2775,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-followers.md",
+      "size": 1267,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-get-my-tasks.md",
+      "size": 2919,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-get-related-tasks.md",
+      "size": 2953,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-reminder.md",
+      "size": 1501,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-reopen.md",
+      "size": 740,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-search.md",
+      "size": 1571,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-set-ancestor.md",
+      "size": 966,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-subscribe-event.md",
+      "size": 2812,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-tasklist-create.md",
+      "size": 1334,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-tasklist-members.md",
+      "size": 1202,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-tasklist-search.md",
+      "size": 1419,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-tasklist-task-add.md",
+      "size": 1514,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-update.md",
+      "size": 1386,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-task\\references/lark-task-upload-attachment.md",
+      "size": 3188,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-vc/SKILL.md",
+      "size": 11417,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-vc\\references/lark-vc-notes.md",
+      "size": 5950,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-vc\\references/lark-vc-recording.md",
+      "size": 5788,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-vc\\references/lark-vc-search.md",
+      "size": 9083,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-vc-agent/SKILL.md",
+      "size": 10364,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-vc-agent\\references/lark-vc-agent-meeting-events.md",
+      "size": 13981,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-vc-agent\\references/lark-vc-agent-meeting-join.md",
+      "size": 6280,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-vc-agent\\references/lark-vc-agent-meeting-leave.md",
+      "size": 4384,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard/SKILL.md",
+      "size": 7209,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/connectors.md",
+      "size": 5589,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/content.md",
+      "size": 1512,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/image.md",
+      "size": 4429,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/lark-whiteboard-query.md",
+      "size": 2181,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/lark-whiteboard-update.md",
+      "size": 3641,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/layout.md",
+      "size": 19130,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/schema.md",
+      "size": 15302,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/style.md",
+      "size": 11095,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\references/typography.md",
+      "size": 2151,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\routes/dsl.md",
+      "size": 6717,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\routes/mermaid.md",
+      "size": 1151,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\routes/svg.md",
+      "size": 3595,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/architecture.md",
+      "size": 22418,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/bar-chart.md",
+      "size": 8029,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/comparison.md",
+      "size": 7595,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/fishbone.md",
+      "size": 9815,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/flowchart.md",
+      "size": 10834,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/flywheel.md",
+      "size": 8809,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/funnel.md",
+      "size": 4319,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/line-chart.md",
+      "size": 9599,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/mermaid.md",
+      "size": 3530,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/milestone.md",
+      "size": 4098,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/organization.md",
+      "size": 8439,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/photo-showcase.md",
+      "size": 6102,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/pyramid.md",
+      "size": 4015,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/swimlane.md",
+      "size": 20058,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-whiteboard\\scenes/treemap.md",
+      "size": 6437,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki/SKILL.md",
+      "size": 7841,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-delete-space.md",
+      "size": 8452,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-move.md",
+      "size": 9652,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-node-copy.md",
+      "size": 2398,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-node-create.md",
+      "size": 6742,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-node-delete.md",
+      "size": 3003,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-node-get.md",
+      "size": 2253,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-node-list.md",
+      "size": 3175,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-space-create.md",
+      "size": 1573,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-wiki\\references/lark-wiki-space-list.md",
+      "size": 2236,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-workflow-meeting-summary/SKILL.md",
+      "size": 4188,
+      "type": "file"
+    },
+    {
+      "path": "skills\\lark-workflow-standup-report/SKILL.md",
+      "size": 4359,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.19b89ae5-bb03-4eb6-bbcb-14c6a8333d9b.7bcda5f8-a2b5-4e92-83da-b4b89f8a33f3.json",
+      "size": 55749,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.3938504f-9aa8-49e0-8a00-86865e9f2d11.a2644b10-f17e-435e-8684-e23df9a006f6.json",
+      "size": 2978,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.b63a0cc9-c0d0-4398-b0a5-614adf174f29.062b205c-3f58-43d8-8c09-ab3376f8d35e.json",
+      "size": 34660,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.b63a0cc9-c0d0-4398-b0a5-614adf174f29.4badb065-7f55-499d-9c54-526737f591f1.json",
+      "size": 48489,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.b63a0cc9-c0d0-4398-b0a5-614adf174f29.aaa82789-1ed3-4ae7-a3e7-feb9aadc69d5.json",
+      "size": 37888,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.b63a0cc9-c0d0-4398-b0a5-614adf174f29.f01fd73b-c4c4-4d05-9226-faccd55651ba.json",
+      "size": 8852,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.db19d060-ae8f-4080-87ce-01fb2a8d37a1.00c21e19-652a-4a6a-8b92-317eb37ca153.json",
+      "size": 2986,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.f01a80b0-4fb1-44bd-9405-7b913f0132c4.40057f1f-b0fa-41e2-af05-55ffd271487b.json",
+      "size": 34580,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.f01a80b0-4fb1-44bd-9405-7b913f0132c4.8d256e47-20aa-4541-9e77-139843df405a.json",
+      "size": 45721,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.f01a80b0-4fb1-44bd-9405-7b913f0132c4.d2c975be-b866-4ff5-aa42-37e60971346f.json",
+      "size": 107277,
+      "type": "file"
+    },
+    {
+      "path": "telemetry/1p_failed_events.f056e2ee-02b8-4dc1-a19d-4d134b3c28b8.a335f853-f1f3-47b8-b2d4-0b3723d82dd1.json",
+      "size": 59596,
+      "type": "file"
+    }
+  ],
+  "workspace_matches": [
+    {
+      "file": "%USER%\\.claude\\plugins\\marketplaces\\claude-plugins-official\\.claude-plugin\\marketplace.json",
+      "keyword": "wsl",
+      "context": "\"source\": \"git-subdir\",\\n        \"url\": \"https://github.com/awslabs/agent-plugins.git\",\\n        \"path\": \"plugins/amazon-location-service\",\\n        \"ref\": \"main\",\\n        \"sha\": \"6cf"
+    },
+    {
+      "file": "%USER%\\.claude\\plugins\\marketplaces\\claude-plugins-official\\external_plugins\\linear\\.claude-plugin\\plugin.json",
+      "keyword": "workspace",
+      "context": "ate issues, manage projects, update statuses, search across workspaces, and streamline your software development workflow with Linear's modern issue tracker.\",\\n  \"author\": {\\n    \"n"
+    },
+    {
+      "file": "%USER%\\.claude\\skills\\lark-slides\\assets\\templates\\administration--annual_gala.xml",
+      "keyword": "mount",
+      "context": "70\" topLeftX=\"442\" topLeftY=\"196\" iconType=\"iconpark/Travel/mountain.svg\">\\n        <border color=\"linear-gradient(90deg,rgba(210, 132, 232, 1) 0%,rgba(146, 108, 242, 1) 33%,rgba(10"
+    },
+    {
+      "file": "%USER%\\.claude\\skills\\lark-slides\\assets\\templates\\administration--company_intro.xml",
+      "keyword": "mount",
+      "context": "64\" topLeftX=\"345\" topLeftY=\"205\" iconType=\"iconpark/Travel/mountain.svg\">\\n        <border color=\"rgba(255, 255, 255, 1)\" width=\"4\" lineJoin=\"miter\" miterLimit=\"10\"/>\\n      </icon>"
+    },
+    {
+      "file": "%USER%\\.claude\\skills\\lark-slides\\assets\\templates\\marketing--business_plan.xml",
+      "keyword": "mount",
+      "context": "\"48\" topLeftX=\"617\" topLeftY=\"69\" iconType=\"iconpark/Travel/mountain.svg\">\\n        <border color=\"rgba(255, 255, 255, 1)\" width=\"2\" lineJoin=\"miter\" miterLimit=\"10\"/>\\n      </icon>"
+    },
+    {
+      "file": "%USER%\\.claude\\skills\\lark-slides\\assets\\templates\\marketing--marketing_plan.xml",
+      "keyword": "mount",
+      "context": "\"30\" topLeftX=\"66\" topLeftY=\"206\" iconType=\"iconpark/Travel/mountain.svg\">\\n        <border color=\"rgba(255, 255, 255, 1)\" width=\"1\" lineJoin=\"miter\" miterLimit=\"10\"/>\\n      </icon>"
+    },
+    {
+      "file": "%USER%\\.claude\\skills\\lark-slides\\assets\\templates\\office--work_summary.xml",
+      "keyword": "folder",
+      "context": "24\" topLeftX=\"805\" topLeftY=\"154\" iconType=\"iconpark/Office/folder-code.svg\">\\n        <fill>\\n          <fillColor color=\"rgba(255, 255, 255, 1)\"/>\\n        </fill>\\n        <border c"
+    },
+    {
+      "file": "%USER%\\.claude\\skills\\lark-slides\\assets\\templates\\operations--marketing_plan.xml",
+      "keyword": "mount",
+      "context": "\"30\" topLeftX=\"66\" topLeftY=\"206\" iconType=\"iconpark/Travel/mountain.svg\">\\n        <border color=\"rgba(255, 255, 255, 1)\" width=\"1\" lineJoin=\"miter\" miterLimit=\"10\"/>\\n      </icon>"
+    },
+    {
+      "file": "%USER%\\.claude\\skills\\lark-slides\\assets\\templates\\personal--personal_resume.xml",
+      "keyword": "wsl",
+      "context": ">\\n        </fill>\\n      </shape>\\n      <img src=\"R0vjbPKQkoywSLxW1ZNcbtmGn4g\" width=\"40\" height=\"40\" topLeftX=\"288\" topLeftY=\"199\" rotation=\"180\" alpha=\"0.6\">\\n        <crop leftOff"
+    }
+  ],
+  "file_structure": {}
+}

@@ -1,0 +1,89 @@
+{
+    "rules":  [
+                  {
+                      "id":  "cmd-escape-ampersand",
+                      "description":  "cmd.exe 模式下 \u0026\u0026 会被当作命令分隔符，需要用 ^\u0026^\u0026 转义",
+                      "triggers":  {
+                                       "type":  "cmd",
+                                       "pattern_in_command":  "\u0026\u0026"
+                                   },
+                      "fix":  {
+                                  "action":  "escape",
+                                  "find":  "\u0026\u0026",
+                                  "replace_with":  "^\u0026^\u0026"
+                              },
+                      "example_before":  "echo hello \u0026\u0026 whoami",
+                      "example_after":  "echo hello ^\u0026^\u0026 whoami",
+                      "hits":  3,
+                      "created":  "2026-05-31"
+                  },
+                  {
+                      "id":  "ps-wsl-semicolon",
+                      "description":  "PowerShell 模式下 ; 会被 PowerShell 解释为语句分隔符，不会传给 bash",
+                      "triggers":  {
+                                       "type":  "powershell",
+                                       "command_contains":  "wsl -e bash -c",
+                                       "pattern_in_command":  ";"
+                                   },
+                      "fix":  {
+                                  "action":  "wrap_single_quotes",
+                                  "description":  "将 bash -c 后面的参数用单引号包裹，而不是双引号"
+                              },
+                      "example_before":  "wsl -e bash -c \"echo hello; whoami\"",
+                      "example_after":  "wsl -e bash -c \u0027echo hello; whoami\u0027",
+                      "hits":  0,
+                      "created":  "2026-05-31"
+                  },
+                  {
+                      "id":  "ps-wsl-pipe",
+                      "description":  "PowerShell 模式下 | 可能被 PowerShell 解释为管道",
+                      "triggers":  {
+                                       "type":  "powershell",
+                                       "command_contains":  "wsl -e bash -c",
+                                       "pattern_in_command":  "|"
+                                   },
+                      "fix":  {
+                                  "action":  "wrap_single_quotes",
+                                  "description":  "确保 bash -c 的参数用单引号包裹，阻止 PowerShell 解析 |"
+                              },
+                      "example_before":  "wsl -e bash -c \"cat file | head -3\"",
+                      "example_after":  "wsl -e bash -c \u0027cat file | head -3\u0027",
+                      "hits":  0,
+                      "created":  "2026-05-31"
+                  },
+                  {
+                      "id":  "cmd-wsl-nested-quotes",
+                      "description":  "cmd.exe 模式下 WSL 命令里的嵌套引号会被 cmd 错误解析",
+                      "triggers":  {
+                                       "type":  "cmd",
+                                       "command_contains":  "wsl -e bash -c \"",
+                                       "pattern_in_command":  "\\\""
+                                   },
+                      "fix":  {
+                                  "action":  "use_powershell_type",
+                                  "description":  "带 WSL 嵌套引号的命令应改用 powershell 类型"
+                              },
+                      "example_before":  "type=cmd, command=wsl -e bash -c \"echo hi\"",
+                      "example_after":  "type=powershell, command=wsl -e bash -c \u0027echo hi\u0027",
+                      "hits":  0,
+                      "created":  "2026-05-31"
+                  },
+                  {
+                      "id":  "rule-template",
+                      "description":  "新规则模板 — 遇到新错误时克隆此规则填写",
+                      "triggers":  {
+                                       "type":  "any",
+                                       "error_in_stderr":  ""
+                                   },
+                      "fix":  {
+                                  "action":  "manual",
+                                  "description":  "待分析后填写修复方案"
+                              },
+                      "hits":  0,
+                      "is_template":  true,
+                      "created":  "2026-05-31"
+                  }
+              ],
+    "version":  "2.0",
+    "last_updated":  "2026-06-01 04:51:00.803"
+}

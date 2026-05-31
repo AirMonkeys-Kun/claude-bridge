@@ -1,0 +1,48 @@
+{
+  "config.json": {
+    "exists": true,
+    "content": "{\n\t\"updaterLastSeenVersion\": \"1.6608.2\",\n\t\"locale\": \"en-US\",\n\t\"lastSeenRequireCoworkFullVmSandbox\": null,\n\t\"hasTrackedInitialActivation\": true,\n\t\"userThemeMode\": \"light\",\n\t\"quickWindowPosition\": {\n\t\t\"absolutePointInWorkspace\": {\n\t\t\t\"x\": 721,\n\t\t\t\"y\": 321\n\t\t},\n\t\t\"monitor\": {\n\t\t\t\"accelerometerSupport\": \"unknown\",\n\t\t\t\"bounds\": {\n\t\t\t\t\"x\": 0,\n\t\t\t\t\"y\": 0,\n\t\t\t\t\"width\": 2048,\n\t\t\t\t\"height\": 1152\n\t\t\t},\n\t\t\t\"colorDepth\": 32,\n\t\t\t\"colorSpace\": \"{primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}\",\n\t\t\t\"depthPerComponent\": 8,\n\t\t\t\"detected\": true,\n\t\t\t\"displayFrequency\": 144,\n\t\t\t\"id\": 609681399,\n\t\t\t\"internal\": false,\n\t\t\t\"label\": \"N27SQ-PLUS\",\n\t\t\t\"maximumCursorSize\": {\n\t\t\t\t\"width\": 0,\n\t\t\t\t\"height\": 0\n\t\t\t},\n\t\t\t\"monochrome\": false,\n\t\t\t\"nativeOrigin\": {\n\t\t\t\t\"x\": 0,\n\t\t\t\t\"y\": 0\n\t\t\t},\n\t\t\t\"rotation\": 0,\n\t\t\t\"scaleFactor\": 1.25,\n\t\t\t\"size\": {\n\t\t\t\t\"width\": 2048,\n\t\t\t\t\"height\": 1152\n\t\t\t},\n\t\t\t\"workArea\": {\n\t\t\t\t\"x\": 0,\n\t\t\t\t\"y\": 0,\n\t\t\t\t\"width\": 2048,\n\t\t\t\t\"height\": 1112\n\t\t\t},\n\t\t\t\"workAreaSize\": {\n\t\t\t\t\"width\": 2048,\n\t\t\t\t\"height\": 1112\n\t\t\t},\n\t\t\t\"touchSupport\": \"unknown\"\n\t\t},\n\t\t\"relativePointFromMonitor\": {\n\t\t\t\"x\": 721,\n\t\t\t\"y\": 321\n\t\t}\n\t}\n}"
+  },
+  "Local State": {
+    "exists": true,
+    "content": "{\"os_crypt\":{\"audit_enabled\":true,\"encrypted_key\":\"RFBBUEkBAAAA0Iyd3wEV0RGMegDAT8KX6wEAAAB/f3iniW0KRJJ8e+OMfUmMEAAAABIAAABDAGgAcgBvAG0AaQB1AG0AAAAQZgAAAAEAACAAAAAiChb9sEVokyHJyU5PuVT09+ZwAf9kry/tVQu2r2niEwAAAAAOgAAAAAIAACAAAAA2b7c3b5sbNs4YVStojBdVps+s9SkZlNGNmXJBsM463DAAAABl6yoy4kK4+zjmx0JT+iHrOVzpj1NtfKeiLfYivPNIy78rPEEonEanTTG0UqLanR9AAAAA8DW3SeFgZARZt+1Ozd+EauvenrPN9aM+zzl9bv2EV/UrN49YoEWklTDE2ylF7SJfNRdVNga8eWvjnE6w3FZC2w==\"},\"uninstall_metrics\":{\"installation_date2\":\"1778411372\"}}"
+  },
+  "Preferences": {
+    "exists": true,
+    "content": "{\"electron\":{\"devtools\":{\"bounds\":{\"height\":600,\"width\":800,\"x\":0,\"y\":0},\"preferences\":{\"adorner-settings\":\"[{\\\"adorner\\\":\\\"ad\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"container\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"flex\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"grid\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"grid-lanes\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"media\\\",\\\"isEnabled\\\":false},{\\\"adorner\\\":\\\"popover\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"reveal\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"scroll\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"scroll-snap\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"slot\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"view-source\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"starting-style\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"subgrid\\\",\\\"isEnabled\\\":true},{\\\"adorner\\\":\\\"top-layer\\\",\\\"isEnabled\\\":true}]\",\"closeable-tabs\":\"{\\\"security\\\":true,\\\"freestyler\\\":true,\\\"chrome-recorder\\\":true}\",\"currentDockState\":\"\\\"undocked\\\"\",\"elements.styles.sidebar.width\":\"{\\\"vertical\\\":{\\\"size\\\":0,\\\"showMode\\\":\\\"OnlyMain\\\"}}\",\"inspector-view.split-view-state\":\"{\\\"vertical\\\":{\\\"size\\\":0}}\",\"inspector.drawer-split-view-state\":\"{\\\"horizontal\\\":{\\\"size\\\":0,\\\"showMode\\\":\\\"OnlyMain\\\"}}\",\"inspectorVersion\":\"40\",\"last-dock-state\":\"\\\"right\\\"\",\"releaseNoteVersionSeen\":\"146\",\"styles-pane-sidebar-tab-order\":\"{\\\"styles\\\":10,\\\"computed\\\":20}\",\"syncedInspectorVersion\":\"40\"}}},\"migrated_user_scripts_toggle\":true,\"partition\":{\"per_host_zoom_levels\":{\"15932261258675305515\":{}}},\"spellcheck\":{\"dictionaries\":[\"en-US\"],\"dictionary\":\"\"}}"
+  },
+  "session_files_with_wsl": [
+    {
+      "file": "\\local-agent-mode-sessions\\3745f28d-e68c-44c8-84bd-0d0401d33981\\00000000-0000-4000-8000-000000000001\\local_0e04c4be-d763-4b5e-84e8-9068268f88b6.json",
+      "size": 40785
+    },
+    {
+      "file": "\\local-agent-mode-sessions\\3745f28d-e68c-44c8-84bd-0d0401d33981\\00000000-0000-4000-8000-000000000001\\local_14c94032-2274-4470-8711-35ce19f772e4.json",
+      "size": 47475
+    },
+    {
+      "file": "\\local-agent-mode-sessions\\3745f28d-e68c-44c8-84bd-0d0401d33981\\00000000-0000-4000-8000-000000000001\\local_3bbfc8b7-25b5-4cdd-981b-5e39e0e1e828.json",
+      "size": 43087
+    },
+    {
+      "file": "\\local-agent-mode-sessions\\3745f28d-e68c-44c8-84bd-0d0401d33981\\00000000-0000-4000-8000-000000000001\\local_8108405e-cac5-481d-9ad7-a58b2452fc01.json",
+      "size": 60825
+    },
+    {
+      "file": "\\local-agent-mode-sessions\\3745f28d-e68c-44c8-84bd-0d0401d33981\\00000000-0000-4000-8000-000000000001\\scheduled-tasks.json",
+      "size": 1581
+    }
+  ],
+  "session_file_count": 5,
+  "other_workspace_configs": [],
+  "named_config_files": [
+    {
+      "file": "\\sentry\\session.json",
+      "size": 261
+    },
+    {
+      "file": "\\vm_bundles\\claudevm.bundle\\sessiondata.vhdx",
+      "size": 608174080
+    }
+  ]
+}

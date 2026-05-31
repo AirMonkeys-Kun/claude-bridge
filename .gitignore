@@ -1,0 +1,40 @@
+# ── Runtime results ──
+r_*.json
+r_*.txt
+
+# ── Logs ──
+*.log
+watcher/*.log
+
+# ── Lock / heartbeat ──
+watcher/.watcher.lock
+watcher/.watcher_heartbeat
+cluster/.heartbeat
+
+# ── SQLite temp DBs ──
+watcher/_DIPS.sqlite
+watcher/_WebStorage.sqlite
+*_DIPS.sqlite
+*_WebStorage.sqlite
+
+# ── Python bytecode ──
+__pycache__/
+*.pyc
+*.pyo
+
+# ── Editor / IDE ──
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Temp / scratch txt files ──
+watcher/*.txt
+!watcher/queue.txt
+
+# ── OS junk ──
+ehthumbs.db
+Desktop.ini

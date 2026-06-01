@@ -1,0 +1,7 @@
+{
+  "bash": "on",
+  "toggle_point": "rootfs.vhdx symlink",
+  "on_cmd": "move rootfs.vhdx.off rootfs.vhdx",
+  "off_cmd": "move rootfs.vhdx rootfs.vhdx.off",
+  "updated": "2026-06-01"
+}

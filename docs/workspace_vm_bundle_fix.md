@@ -221,6 +221,54 @@ open /mnt/.virtiofs-root/shared/.../claude-code-vm/2.1.128/claude: input/output 
 
 ---
 
+## 附：Bash 开关实验
+
+> 目的：bash VM 运行时消耗资源（CPU/内存 ~400MB+），不需要时可以受控断开
+
+### 原理
+
+利用第一条修复线（Layer 1）的失败模式：cowork-svc 启动时找不到 rootfs.vhdx 会快速失败。
+
+```
+断开: ren rootfs.vhdx rootfs.vhdx.off → taskkill cowork-svc → bash 快速失败
+恢复: ren rootfs.vhdx.off rootfs.vhdx → sc start CoworkVMService → bash 恢复
+```
+
+### 操作方式
+
+通过 file_bridge（SYSTEM 上下文）执行，因为 symlink 在 SYSTEM 可见的非 MSIX 路径中。
+
+**断开 bash：**
+```json
+{"state":"pending","cmd_id":"bash_off","command":"cmd /c ren C:\\...\\rootfs.vhdx rootfs.vhdx.off && taskkill /f /im cowork-svc.exe","type":"cmd","timeout":15}
+```
+结果：~270ms，VM 服务被 kill，bash 调用立即失败。
+
+**恢复 bash：**
+```json
+{"state":"pending","cmd_id":"bash_on","command":"cmd /c ren C:\\...\\rootfs.vhdx.off rootfs.vhdx && taskkill /f /im cowork-svc.exe && timeout /t 3 && sc start CoworkVMService","type":"cmd","timeout":30}
+```
+注意：恢复比断开复杂，因为 `sc start` 可能卡在 START_PENDING，需要 `taskkill` 先杀干净再启动。
+
+### 实测结果
+
+| 操作 | 耗时 | 结果 |
+|------|------|------|
+| 断开（ren + taskkill） | 268ms | ✅ bash 立即断开 |
+| 恢复（ren + taskkill + sc start） | 8-12s | ⚠️ 成功但 sc start 有时卡住 |
+
+### 局限性
+
+1. **恢复不可靠**：`sc stop CoworkVMService` 常卡在 STOP_PENDING（WIN32_PACKAGED_PROCESS 特性），必须用 `taskkill` 强杀。
+2. **多次重启后服务僵死**：反复 `taskkill` 可能让服务陷入"RUNNING 但 VM 连不上"的状态。此时只能重启 Claude Desktop 或等待超时恢复。
+3. **没有软开关**：目前方案是直接操作文件系统，不是优雅的服务暂停/恢复。
+
+### 与桥的关系
+
+这个开关本身就是桥价值的证明：bash 能通过 rename symlink + kill 禁用自己吗？不能——它在 VM 里，看不到宿主文件系统。但 file_bridge（SYSTEM）可以，**因为桥在 bash 之外**。
+
+---
+
 ## 七、相关 Issue
 
 - [Issue #62430 - Cowork sandbox VM bundle not found in Roaming path on Windows 10 Pro](https://github.com/anthropics/claude-code/issues/62430) — 本机用户 AirMonkeys-Kun 提交，硬链接修复

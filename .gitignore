@@ -6,10 +6,19 @@ r_*.txt
 *.log
 watcher/*.log
 
-# ── Lock / heartbeat ──
+# ── Cluster runtime artifacts ──
+cluster/.heartbeat
+cluster/*/.heartbeat
+cluster/*/.lock
+cluster/*/queue.txt
+cluster/*/.user_bridge_started
+cluster/*/worker_stderr.log
+cluster/global_state.json
+cluster/state_history.json
+
+# ── Legacy watcher runtime ──
 watcher/.watcher.lock
 watcher/.watcher_heartbeat
-cluster/.heartbeat
 
 # ── SQLite temp DBs ──
 watcher/_DIPS.sqlite

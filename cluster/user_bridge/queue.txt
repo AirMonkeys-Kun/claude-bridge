@@ -1,1 +1,0 @@
-{"state":"pending","cmd_id":"push_code","command":"cd \"C:\\Users\\wsx\\Desktop\\claude-bridge\"; if (Test-Path .git) { Remove-Item -Recurse -Force .git -ErrorAction SilentlyContinue }; git init; git remote add origin git@github.com:AirMonkeys-Kun/claude-bridge.git; git add -A; git commit -m \"Claude Bridge V5 - 通信桥集群架构\" 2>&1","type":"powershell","timeout":120}

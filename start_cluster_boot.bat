@@ -1,19 +1,23 @@
 @echo off
-title Claude Bridge Boot Launcher
+title Claude Bridge Boot Launcher (V4)
 cd /d "%~dp0"
 
-:: Start the V3 cluster (scheduler + 6 workers)
-echo === Claude Bridge Boot Launcher ===
-echo [%date% %time%] Starting V3 cluster >> "%~dp0cluster\scheduler.log"
+:: Start the V4 cluster (scheduler + 7 workers)
+echo === Claude Bridge Boot Launcher (V4) ===
+echo [%date% %time%] Starting V4 cluster >> "%~dp0cluster\launch.log"
 call "%~dp0cluster\launch_workers.bat"
 
-:: Start the external file watcher bridge
-echo [%date% %time%] Starting file watcher >> "%~dp0watcher\watcher.log"
-start /B /MIN powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0watcher\watcher.ps1"
+:: V4 cluster is the primary interface. The old watcher.ps1 is no longer needed.
+:: Use V4 worker queues directly:
+::   file_bridge:    cluster\file_bridge\queue.txt  (SYSTEM context)
+::   user_bridge:    cluster\user_bridge\queue.txt   (USER context)
+::   system_bridge:  cluster\system_bridge\queue.txt  (SYSTEM systems operations)
 
-:: Clean orphan watcher dirs from legacy versions
-for /d %%d in ("%~dp0cluster\*_bridge_bridge") do (
-    rmdir /S /Q "%%d" 2>nul
+:: Register guardian scheduled task if not already present (runs every 5 min)
+schtasks /Query /TN BridgeGuardian-V4 >nul 2>&1
+if errorlevel 1 (
+    echo [%date% %time%] Registering V4 guardian task >> "%~dp0cluster\launch.log"
+    call "%~dp0cluster\register_guardian.bat"
 )
 
 echo Boot launcher completed

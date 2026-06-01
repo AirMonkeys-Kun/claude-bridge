@@ -159,8 +159,8 @@ $p.Dispose()
 TLog "launch_user exit=$exitCode stdout=$stdout stderr=$stderr"
 
 if ($exitCode -eq 0 -and $stdout -match "^PID=(\d+)$") {
-    $pid = $matches[1]
-    TLog "Worker launched PID=$pid"
+    $workerPid = $matches[1]
+    TLog "Worker launched PID=$workerPid"
     Start-Sleep -Seconds 3
     if (Test-Path (Join-Path $bridgeBase "queue.txt")) {
         TLog "Worker initialized OK"

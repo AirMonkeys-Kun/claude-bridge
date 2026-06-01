@@ -8,7 +8,7 @@
 #>
 
 param(
-    [string]$BridgeBase = $(if (Test-Path "C:\Users\wsx\Desktop\claude-bridge") { "C:\Users\wsx\Desktop\claude-bridge" } else { throw "BridgeBase not found" })
+    [string]$BridgeBase = $(if ($PSScriptRoot -and (Test-Path (Split-Path -Parent $PSScriptRoot))) { Split-Path -Parent $PSScriptRoot } else { throw "BridgeBase not found. Run this script from cluster/ or provide -BridgeBase" })
 )
 
 $script:clusterDir = Join-Path $BridgeBase "cluster"

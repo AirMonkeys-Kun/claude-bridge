@@ -1,2 +1,3 @@
 $ErrorActionPreference = "Continue"
-& 'C:\Users\wsx\Desktop\claude-bridge\cluster\master_scheduler.ps1' -BridgeBase 'C:\Users\wsx\Desktop\claude-bridge'
+# master_scheduler.ps1 auto-detects BridgeBase from its own $PSScriptRoot
+& (Join-Path $PSScriptRoot "master_scheduler.ps1")

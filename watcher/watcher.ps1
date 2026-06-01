@@ -22,17 +22,7 @@ $script:lastCmdId = ""
 $script:utf8 = [System.Text.UTF8Encoding]::new($false)
 $script:rulesCache = $null   # cached rules, reloaded every 10 commands
 
-# ── V5: Shared rule engine (dot-sourced from cluster) ──
-$script:ruleEnginePath = Join-Path (Split-Path -Parent $baseDir) "cluster\rule_engine.ps1"
-if (Test-Path $script:ruleEnginePath) {
-    . $script:ruleEnginePath
-    Init-RuleEngine -BridgeBase (Split-Path -Parent $baseDir)
-    Log "Rule engine loaded from $($script:ruleEnginePath)"
-} else {
-    Log "WARNING: Rule engine not found at $($script:ruleEnginePath) — using legacy functions"
-}
-
-# ── helpers ──────────────────────────────────────────────────────────────
+# ── helpers (defined first; Log is used by rule engine loading below) ──
 
 function Write-Text { param([string]$path, [string]$content)
     $retries = 3
@@ -69,6 +59,16 @@ function Log { param([string]$m)
     } catch {
         # Logging never blocks or crashes the watcher
     }
+}
+
+# ── V5: Shared rule engine (dot-sourced from cluster) ──
+$script:ruleEnginePath = Join-Path (Split-Path -Parent $baseDir) "cluster\rule_engine.ps1"
+if (Test-Path $script:ruleEnginePath) {
+    . $script:ruleEnginePath
+    Init-RuleEngine -BridgeBase (Split-Path -Parent $baseDir)
+    Log "Rule engine loaded from $($script:ruleEnginePath)"
+} else {
+    Log "WARNING: Rule engine not found at $($script:ruleEnginePath) — using legacy functions"
 }
 
 # ── V5: rule engine — apply learned rules to transform commands ──

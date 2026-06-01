@@ -88,7 +88,7 @@ try {
 } catch { $sys.cowork_service = "Unknown"; DLog "  service FAIL: $_" }
 
 try {
-    $sys.bash_enabled = Test-Path "C:\Users\wsx\AppData\Local\Claude-3p\vm_bundles\claudevm.bundle\rootfs.vhdx"
+    $sys.bash_enabled = Test-Path "$env:LOCALAPPDATA\Claude-3p\vm_bundles\claudevm.bundle\rootfs.vhdx"
     DLog "  bash: $($sys.bash_enabled)"
 } catch { $sys.bash_enabled = $false }
 

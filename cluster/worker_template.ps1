@@ -8,10 +8,12 @@
 
 param(
     [string]$WorkerName = $(throw "WorkerName required"),
-    [string]$BridgeBase = $(throw "BridgeBase required")
+    [string]$BridgeBase = $(if ($PSScriptRoot) { Split-Path -Parent $PSScriptRoot } else { throw "BridgeBase required. Run from cluster/ or provide -BridgeBase" })
 )
 
-$script:baseDir = Join-Path $BridgeBase "cluster\\${WorkerName}_bridge"
+# WorkerName already includes _bridge suffix (e.g. "file_bridge")
+# Do NOT append _bridge again or the path becomes file_bridge_bridge
+$script:baseDir = Join-Path $BridgeBase "cluster\\$WorkerName"
 $script:queueFile = Join-Path $script:baseDir "queue.txt"
 $script:logFile = Join-Path $script:baseDir "watcher.log"
 $script:heartbeatFile = Join-Path $script:baseDir ".watcher_heartbeat"

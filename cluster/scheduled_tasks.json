@@ -1,11 +1,12 @@
 {
     "v": 1,
+    "_migration_note": "Paths below are auto-detected by start_cluster.ps1 at deploy time. Edit this JSON only as a fallback — always run start_cluster.ps1 or redeploy_file.ps1 after migrating to a new machine.",
     "description": "Claude Bridge — Scheduled Tasks Registry. Tasks defined here are executed by the bridge cluster when triggered by Cowork's native scheduled tasks.",
     "tasks": [
         {
             "id": "collect_state",
             "channel": "user",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\wsx\\Desktop\\claude-bridge\\cluster\\collect_state.ps1\"",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\zebbingo\\claude-bridge\\cluster\\collect_state.ps1\"",
             "type": "cmd",
             "timeout": 60,
             "enabled": true,
@@ -25,7 +26,7 @@
         {
             "id": "check_worker_health",
             "channel": "user",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$d='C:\\Users\\wsx\\Desktop\\claude-bridge\\cluster'; $w=@('file_bridge','registry_bridge','process_bridge','network_bridge','system_bridge','wsl_bridge','user_bridge'); $r=@{}; foreach($n in $w){$f=Join-Path (Join-Path $d $n) '.heartbeat'; if(Test-Path $f){$a=[math]::Round(((Get-Date)-(Get-Item $f).LastWriteTime).TotalSeconds,0); $r[$n]=$a}else{$r[$n]=$null}}; ($r|ConvertTo-Json -Compress)\"",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$d='D:\\zebbingo\\claude-bridge\\cluster'; $w=@('file_bridge','registry_bridge','process_bridge','network_bridge','system_bridge','wsl_bridge','user_bridge'); $r=@{}; foreach($n in $w){$f=Join-Path (Join-Path $d $n) '.watcher_heartbeat'; if(Test-Path $f){$a=[math]::Round(((Get-Date)-(Get-Item $f).LastWriteTime).TotalSeconds,0); $r[$n]=$a}else{$r[$n]=$null}}; ($r|ConvertTo-Json -Compress)\"",
             "type": "cmd",
             "timeout": 30,
             "enabled": true,

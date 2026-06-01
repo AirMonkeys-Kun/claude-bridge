@@ -1,3 +1,3 @@
 @echo off
-start /B powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Users\wsx\Desktop\claude-bridge\cluster\scheduler.ps1" -ClusterDir "C:\Users\wsx\Desktop\claude-bridge\cluster"
+start /B powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scheduler.ps1" -ClusterDir "%~dp0"
 echo Launched scheduler

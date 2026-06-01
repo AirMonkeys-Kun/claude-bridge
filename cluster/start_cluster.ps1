@@ -5,9 +5,9 @@
  Run this as Administrator (or SYSTEM).
 #>
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-$bridgeBase = Split-Path -Parent $scriptPath  # C:\Users\wsx\Desktop\claude-bridge
+$bridgeBase = Split-Path -Parent $scriptPath  # Auto-detected bridge root
 $clusterDir = $scriptPath
 $templatePath = Join-Path $clusterDir "worker_template.ps1"
 $schedulerPath = Join-Path $clusterDir "master_scheduler.ps1"
@@ -98,9 +98,7 @@ foreach ($w in $workers) {
 }
 
 # ── Step 4: Register scheduled tasks for each worker ──
-Log "=== Registering worker scheduled tasks (SYSTEM) ==="
-$templateContent = Get-Content $templatePath -Raw
-$encodedTemplate = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($templateContent))
+Log "=== Registering worker scheduled tasks (SYSTEM, file-based) ==="
 
 foreach ($w in $workers) {
     $taskName = "BridgeCluster-$($w.name)"
@@ -109,16 +107,9 @@ foreach ($w in $workers) {
     # Unregister if exists
     try { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue } catch {}
 
-    # Create inline PowerShell command that loads the template and runs it
-    $psCmd = @"
-`$ErrorActionPreference = "Continue"
-`$template = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$encodedTemplate'))
-`$scriptBlock = [ScriptBlock]::Create(`$template)
-& `$scriptBlock -WorkerName '$workerName' -BridgeBase '$bridgeBase'
-"@
-    $encodedCmd = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($psCmd))
-
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCmd"
+    # File-based: pass -WorkerName and -BridgeBase as arguments.
+    # BridgeBase can be omitted once worker_template.ps1 auto-detects from $PSScriptRoot.
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$templatePath`" -WorkerName $workerName -BridgeBase `"$bridgeBase`""
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Priority 7
     Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
@@ -126,21 +117,11 @@ foreach ($w in $workers) {
 }
 
 # ── Step 5: Register scheduler task ──
-Log "=== Registering scheduler task (SYSTEM) ==="
+Log "=== Registering scheduler task (SYSTEM, file-based) ==="
 $schedulerTaskName = "BridgeCluster-Scheduler"
 try { Unregister-ScheduledTask -TaskName $schedulerTaskName -Confirm:$false -ErrorAction SilentlyContinue } catch {}
 
-$schedulerContent = Get-Content $schedulerPath -Raw
-$encodedScheduler = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($schedulerContent))
-$schedPsCmd = @"
-`$ErrorActionPreference = "Continue"
-`$template = [System.Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('$encodedScheduler'))
-`$scriptBlock = [ScriptBlock]::Create(`$template)
-& `$scriptBlock -BridgeBase '$bridgeBase'
-"@
-$encodedSchedCmd = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($schedPsCmd))
-
-$schedAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedSchedCmd"
+$schedAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$schedulerPath`" -BridgeBase `"$bridgeBase`""
 $schedPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $schedSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Priority 7
 Register-ScheduledTask -TaskName $schedulerTaskName -Action $schedAction -Principal $schedPrincipal -Settings $schedSettings -Force | Out-Null

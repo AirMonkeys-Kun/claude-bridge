@@ -1,1 +1,1 @@
-{"v":3,"state":"idle"}
+{"state":"idle","cmd_id":"","command":"","type":""}

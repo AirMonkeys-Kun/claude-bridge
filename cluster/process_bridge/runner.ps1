@@ -1,2 +1,4 @@
 $ErrorActionPreference = "Continue"
-& 'C:\Users\wsx\Desktop\claude-bridge\cluster\worker_template.ps1' -WorkerName 'process_bridge' -BridgeBase 'C:\Users\wsx\Desktop\claude-bridge'
+$clusterDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$bridgeBase = Split-Path -Parent $clusterDir
+& (Join-Path $clusterDir "worker_template.ps1") -WorkerName 'process_bridge' -BridgeBase $bridgeBase

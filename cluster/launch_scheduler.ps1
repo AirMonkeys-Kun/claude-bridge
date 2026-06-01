@@ -1,3 +1,4 @@
-# Simple scheduler launcher
-Start-Process powershell.exe -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File "C:\Users\wsx\Desktop\claude-bridge\cluster\scheduler.ps1" -ClusterDir "C:\Users\wsx\Desktop\claude-bridge\cluster"' -WindowStyle Hidden
+# Simple scheduler launcher — auto-detects path
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptDir\scheduler.ps1`" -ClusterDir `"$scriptDir`"" -WindowStyle Hidden
 Write-Host "Scheduler launched"

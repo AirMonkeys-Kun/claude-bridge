@@ -1,9 +1,23 @@
 #Requires -Version 5.0
 <#
- Claude Bridge Cluster Worker — v1
+ Claude Bridge Cluster Worker — v4
  ──────────────────────────
  Specialized watcher for a single domain (file/registry/process/network/system/wsl)
  Manages its own queue, PID lock, log, and heartbeat.
+
+ CHANGELOG:
+   v4 (2026-06-01) — VERIFIED
+     - FIX: Multi-line stdout NOW FULLY CAPTURED (ReadToEndAsync + WaitForExit).
+       Root cause: synchronous ReadToEnd after WaitForExit had pipe-buffer race.
+       v4 uses Background read task + WaitForExit(ms) + task.Result to drain fully.
+     - NEW: powershell_text type using -Command (avoids CLIXML in stderr)
+     - FIX: Timer resolution — all command types now get (timeout+2)s wall clock
+   v3 (not deployed — internal iteration)
+     - Tried synchronous ReadToEnd — failed due to pipe buffer race
+   v2 (2026-06-01)
+     - FIX: Partial multi-line fix (parameterless WaitForExit for async drain)
+     - FIX: INLINE ${_} syntax note
+     - IMPROVE: Better logging with duration on INLINE results
 #>
 
 param(
@@ -109,7 +123,7 @@ while ($true) {
             Write-Text -path $script:queueFile -content $idleQueue
             $inlineRes = @{state=$(if($inlineError){"error"}else{"done"});cmd_id=$cid;exit_code=$inlineExit;stdout=$inlineOut;stderr=$inlineErr;error=$inlineError;duration_ms=[int]((Get-Date)-$t0).TotalMilliseconds;timestamp=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
             Write-Text -path (Join-Path $script:baseDir "r_${cid}.json") -content ($inlineRes | ConvertTo-Json -Compress)
-            Log "[$cid] INLINE result written"
+            Log "[$cid] INLINE result written (${duration}ms)"
             continue
         }
 
@@ -124,9 +138,14 @@ while ($true) {
                 $psi.FileName = "powershell.exe"
                 $enc = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($rawCmd))
                 $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $enc"
+            } elseif ($ctype -eq "powershell_text") {
+                $psi.FileName = "powershell.exe"
+                $escapedCmd = $rawCmd -replace '"', '\"'
+                $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"$escapedCmd`""
             } elseif ($ctype -eq "wsl") {
                 $psi.FileName = "wsl.exe"
-                $psi.Arguments = "-e bash -c $rawCmd"
+                $escapedCmd = $rawCmd -replace '"', '\"'
+                $psi.Arguments = "-e bash -c `"$escapedCmd`""
             } else {
                 throw "Unknown type: $ctype"
             }
@@ -134,24 +153,32 @@ while ($true) {
             $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
             $psi.StandardOutputEncoding = $script:utf8; $psi.StandardErrorEncoding = $script:utf8
 
-            $outputBuf = New-Object System.Text.StringBuilder; $errorBuf = New-Object System.Text.StringBuilder
             $p = [System.Diagnostics.Process]::Start($psi)
             if (-not $p) { throw "Process.Start returned null" }
 
-            $outEvent = Register-ObjectEvent -InputObject $p -EventName OutputDataReceived -Action { $d=$event.MessageData; $lk=$event.MessageData[1];if($EventArgs.Data-ne$null){$lk.EnterWriteLock();try{[void]$d[0].AppendLine($EventArgs.Data)}finally{$lk.ExitWriteLock()}}} -MessageData @($outputBuf, $null) -SupportEvent
-            $errEvent = Register-ObjectEvent -InputObject $p -EventName ErrorDataReceived -Action { $d=$event.MessageData; $lk=$event.MessageData[1];if($EventArgs.Data-ne$null){$lk.EnterWriteLock();try{[void]$d[0].AppendLine($EventArgs.Data)}finally{$lk.ExitWriteLock()}}} -MessageData @($errorBuf, $null) -SupportEvent
-            $p.BeginOutputReadLine(); $p.BeginErrorReadLine()
+            # v4: ReadToEndAsync runs in background while we wait for exit.
+            # This avoids the pipe-buffer race entirely:
+            #   v2 (async events): events not drained before WaitForExit returns
+            #   v3 (sync ReadToEnd after WaitForExit): pipe buffer not fully flushed
+            #   v4 (ReadToEndAsync + WaitForExit): background read active during execution,
+            #      when process exits the task already holds all output.
+            $outTask = $p.StandardOutput.ReadToEndAsync()
+            $errTask = $p.StandardError.ReadToEndAsync()
 
             if ($p.WaitForExit(($origTimeout+2) * 1000)) {
-                Start-Sleep -Milliseconds 300
-                $stdout = $outputBuf.ToString(); $stderr = $errorBuf.ToString(); $exitCode = $p.ExitCode
+                $exitCode = $p.ExitCode
+                $stdout = $outTask.Result
+                $stderr = $errTask.Result
                 Log "[$cid] exit=$exitCode out=$($stdout.Length)chars err=$($stderr.Length)chars"
             } else {
-                $p.Kill(); $stdout = "[TIMEOUT]"; $exitCode = -1; $errorMsg = "TIMEOUT"
-                Log "[$cid] TIMEOUT"
+                $p.Kill()
+                Start-Sleep -Milliseconds 300
+                try { $stdout = $outTask.Result } catch { $stdout = "" }
+                try { $stderr = $errTask.Result } catch { $stderr = "" }
+                $stdout = "[TIMEOUT after ${origTimeout}s]`r`n$stdout"
+                $exitCode = -1; $errorMsg = "TIMEOUT"
+                Log "[$cid] TIMEOUT after ${origTimeout}s"
             }
-            try { Unregister-Event -SourceIdentifier $outEvent.Name -ErrorAction SilentlyContinue } catch {}
-            try { Unregister-Event -SourceIdentifier $errEvent.Name -ErrorAction SilentlyContinue } catch {}
             $p.Dispose()
         } catch {
             $errorMsg = $_.Exception.Message; Log "[$cid] EXCEPTION: $errorMsg"

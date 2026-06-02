@@ -177,7 +177,7 @@ while ($true) {
         }
 
         if ($workerResult -and $workerResult.cmd_id -eq $cid) {
-            Log "[$cid] Result from $channel: exit=$($workerResult.exit_code) out=$($workerResult.stdout.Length)chars err=$($workerResult.stderr.Length)chars"
+            Log "[$cid] Result from ${channel}: exit=$($workerResult.exit_code) out=$($workerResult.stdout.Length)chars err=$($workerResult.stderr.Length)chars"
             # Copy result to cluster result dir
             $clusterResult = $workerResult | ConvertTo-Json -Compress
             Write-Text -path (Join-Path $script:clusterDir "r_${cid}.json") -content $clusterResult

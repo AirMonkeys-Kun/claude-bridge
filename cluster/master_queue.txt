@@ -1,1 +1,1 @@
-{"v":3,"state":"idle","c":[],"r":{}}
+{"state":"idle","cmd_id":"","channel":"","command":"","type":""}

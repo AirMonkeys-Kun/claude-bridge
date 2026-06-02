@@ -32,6 +32,16 @@
             "enabled": true,
             "description": "Quick worker heartbeat check — alert if any > 90s stale",
             "cron": "*/5 * * * *"
+        },
+        {
+            "id": "fix_wsl_paths",
+            "channel": "user",
+            "command": "C:\\Users\\Administrator\\fix_wsl_v4.ps1",
+            "type": "powershell",
+            "timeout": 60,
+            "enabled": true,
+            "description": "Remove WSL UNC paths from session JSON userSelectedFolders to prevent VM crash",
+            "cron": "*/5 * * * *"
         }
     ]
 }

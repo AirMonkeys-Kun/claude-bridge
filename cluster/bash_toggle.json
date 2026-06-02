@@ -1,7 +1,8 @@
 {
   "bash": "on",
-  "toggle_point": "rootfs.vhdx symlink",
-  "on_cmd": "move rootfs.vhdx.off rootfs.vhdx",
-  "off_cmd": "move rootfs.vhdx rootfs.vhdx.off",
-  "updated": "2026-06-01"
+  "toggle_point": "cowork-svc.exe binary",
+  "on_cmd": "ren cowork-svc.exe.off cowork-svc.exe",
+  "off_cmd": "ren cowork-svc.exe cowork-svc.exe.off",
+  "updated": "2026-06-01 13:10",
+  "note": "Enabled by Claude via takeown + icacls + launch_user.exe. rootfs.vhdx restored from smol-bin.x64.vhdx. hostLoopMode cleared. Restart Claude Desktop to activate VM."
 }

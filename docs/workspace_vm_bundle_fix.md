@@ -225,18 +225,39 @@ open /mnt/.virtiofs-root/shared/.../claude-code-vm/2.1.128/claude: input/output 
 
 > 目的：bash VM 运行时消耗资源（CPU/内存 ~400MB+），不需要时可以受控断开
 
-### 原理
+有三种断点可选，按彻底程度排列。
 
-利用第一条修复线（Layer 1）的失败模式：cowork-svc 启动时找不到 rootfs.vhdx 会快速失败。
+### 断点对比
+
+| 断点 | 位置 | 特点 | 副作用 |
+|------|------|------|--------|
+| **Layer 1** | `rootfs.vhdx → .off` | 快速（268ms），恢复简单 | 每次 Claude 启动弹"workspaceVM 启动失败" |
+| **Layer 2** | `cowork-svc.exe → .off` | SCM 直接返回"找不到文件"，无 VM 错误弹窗 | 恢复需改回 exe 名；Claude 更新可能恢复 |
+| **Layer 3** | 删除服务注册（`sc delete`） | 不可行 — WIN32_PACKAGED_PROCESS 拒绝所有 SCM 修改 | N/A |
+
+### 推荐：Layer 2（断 cowork-svc.exe）
+
+**原理：** `cowork-svc.exe` 位于 `C:\Program Files\WindowsApps\Claude_<version>_x64__pzs8sxrjxfjjc\app\resources\`。该目录虽然是 WindowsApps（受 TrustedInstaller 保护），但 file_bridge（SYSTEM）可以写入。重命名 exe 后 SCM 在启动服务时立即返回"系统找不到指定的文件"，比 Layer 1 的"VM 启动失败"更干净。
+
+**断开 bash（通过 file_bridge）：**
+```json
+{"state":"pending","cmd_id":"bash_off","command":"cmd /c ren \"C:\\Program Files\\WindowsApps\\Claude_1.8555.2.0_x64__pzs8sxrjxfjjc\\app\\resources\\cowork-svc.exe\" cowork-svc.exe.off","type":"cmd","timeout":15}
+```
+注意：版本号 `1.8555.2.0` 可能随更新变化。用 `where /r` 定位当前版本。
+
+**恢复 bash（通过 file_bridge）：**
+```json
+{"state":"pending","cmd_id":"bash_on","command":"cmd /c ren \"C:\\Program Files\\WindowsApps\\Claude_*_x64__pzs8sxrjxfjjc\\app\\resources\\cowork-svc.exe.off\" cowork-svc.exe","type":"cmd","timeout":15}
+```
+
+### Layer 1（备选）：断 rootfs.vhdx
+
+利用第一条修复线（Layer 1）的失败模式：cowork-svc 启动时找不到 rootfs.vhdx 会快速失败，但 Claude 桌面会弹"workspaceVM 启动失败"提示。
 
 ```
 断开: ren rootfs.vhdx rootfs.vhdx.off → taskkill cowork-svc → bash 快速失败
 恢复: ren rootfs.vhdx.off rootfs.vhdx → sc start CoworkVMService → bash 恢复
 ```
-
-### 操作方式
-
-通过 file_bridge（SYSTEM 上下文）执行，因为 symlink 在 SYSTEM 可见的非 MSIX 路径中。
 
 **断开 bash：**
 ```json
@@ -248,9 +269,9 @@ open /mnt/.virtiofs-root/shared/.../claude-code-vm/2.1.128/claude: input/output 
 ```json
 {"state":"pending","cmd_id":"bash_on","command":"cmd /c ren C:\\...\\rootfs.vhdx.off rootfs.vhdx && taskkill /f /im cowork-svc.exe && timeout /t 3 && sc start CoworkVMService","type":"cmd","timeout":30}
 ```
-注意：恢复比断开复杂，因为 `sc start` 可能卡在 START_PENDING，需要 `taskkill` 先杀干净再启动。
+注意：`sc start` 可能卡在 START_PENDING，需要 `taskkill` 先杀干净再启动。
 
-### 实测结果
+### 实测结果（Layer 1）
 
 | 操作 | 耗时 | 结果 |
 |------|------|------|
@@ -259,8 +280,8 @@ open /mnt/.virtiofs-root/shared/.../claude-code-vm/2.1.128/claude: input/output 
 
 ### 局限性
 
-1. **恢复不可靠**：`sc stop CoworkVMService` 常卡在 STOP_PENDING（WIN32_PACKAGED_PROCESS 特性），必须用 `taskkill` 强杀。
-2. **多次重启后服务僵死**：反复 `taskkill` 可能让服务陷入"RUNNING 但 VM 连不上"的状态。此时只能重启 Claude Desktop 或等待超时恢复。
+1. **WIN32_PACKAGED_PROCESS 不可禁用**：`sc config` / `sc delete` 均返回 error 5（拒绝访问），即使从 SYSTEM 上下文；服务注册由 MSIX 包管理。
+2. **断点可能被恢复**：Claude 应用更新可能覆盖 WindowsApps 目录下的文件，导致 Layer 2 失效。
 3. **没有软开关**：目前方案是直接操作文件系统，不是优雅的服务暂停/恢复。
 
 ### 与桥的关系

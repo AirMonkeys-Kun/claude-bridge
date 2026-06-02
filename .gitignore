@@ -11,6 +11,9 @@ cluster/.heartbeat
 cluster/*/.heartbeat
 cluster/*/.lock
 cluster/*/queue.txt
+cluster/*/.watcher.lock
+cluster/*/.watcher_heartbeat
+cluster/.scheduler_heartbeat
 cluster/*/.user_bridge_started
 cluster/*/worker_stderr.log
 cluster/global_state.json
@@ -41,9 +44,4 @@ __pycache__/
 Thumbs.db
 
 # ── Temp / scratch txt files ──
-watcher/*.txt
-!watcher/queue.txt
-
-# ── OS junk ──
-ehthumbs.db
-Desktop.ini
+wat

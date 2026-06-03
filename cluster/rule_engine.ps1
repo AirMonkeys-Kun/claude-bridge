@@ -60,13 +60,18 @@ function Filter-CLIXML {
     $clean = @()
     $inClixml = $false
     foreach ($line in $lines) {
-        if ($line -match '^#< CLIXML') { $inClixml = $true; continue }
-        if ($inClixml) {
-            if ($line -match '</Objs>') { $inClixml = $false; continue }
-            if ($line -notmatch '<') { $inClixml = $false }
-            else { continue }
+        # Enter CLIXML mode: header or XML block start
+        if ($line -match '^#< CLIXML' -or $line -match '^<Objs\s') {
+            $inClixml = $true; continue
         }
-        if (-not $inClixml -and -not [string]::IsNullOrWhiteSpace($line)) {
+        if ($inClixml) {
+            # End of CLIXML XML block
+            if ($line -match '</Objs>') { $inClixml = $false; continue }
+            # Skip EVERY line inside CLIXML block unconditionally
+            continue
+        }
+        # Only keep non-empty lines outside CLIXML blocks
+        if (-not [string]::IsNullOrWhiteSpace($line)) {
             $clean += $line
         }
     }
@@ -128,6 +133,7 @@ function Apply-Rules {
         if (-not $typeMatch) { continue }
         if ($triggers.command_contains -and $modified -notmatch [regex]::Escape($triggers.command_contains)) { continue }
         if ($triggers.pattern_in_command -and $modified -notmatch $triggers.pattern_in_command) { continue }
+        if ($triggers.pattern_regex -and $modified -notmatch $triggers.pattern_regex) { continue }
         $fix = $rule.fix
         $appliedThis = $false
         if ($fix.action -eq "escape" -and $fix.find -and $fix.replace_with) {
@@ -196,6 +202,28 @@ function Log-ExecutionError {
         if ($Command -match 'wsl' -and $Command -match ';') { $patternSignatures += "semicolon_in_ps_wsl" }
         if ($Command -match 'wsl' -and $Command -match '\|') { $patternSignatures += "pipe_in_ps_wsl" }
     }
+    # TIMEOUT detection
+    $isTimeout = $false
+    if ($DurationMs -gt 15000 -and $ExitCode -ne 0) {
+        $patternSignatures += "potential_timeout"
+        $isTimeout = $true
+    } elseif ($DurationMs -gt 30000) {
+        $patternSignatures += "long_running"
+    }
+    if ("$StdoutText$StderrText" -match "TIMEOUT") {
+        $patternSignatures += "timeout_in_output"
+        $isTimeout = $true
+    }
+    if ($isTimeout -and $issueDesc -notmatch "timeout") {
+        $issueDesc = "timeout_${issueDesc}"
+    }
+    # Shell-type mismatch patterns
+    if ($Type -in @("powershell","p","user") -and $Command -match '&&') { $patternSignatures += "ps_ampersand" }
+    if ($Command -match 'python' -and $Command -match ':<[0-9]') { $patternSignatures += "python_fstring_format" }
+    if ($Command -match '\$env:\$_') { $patternSignatures += "dollar_underscore_env" }
+    if ($Type -in @("cmd","c") -and $Command -match 'Start-Process') { $patternSignatures += "start_process_in_cmd" }
+    if ($Command -match '\$pid:\s*\$_') { $patternSignatures += "dollar_pid_scope" }
+    if ($cleanStderr -match "not recognized|is not a cmdlet|不是内部或外部命令") { $patternSignatures += "wrong_shell_type" }
     $entry = @{
         cmd_id=$CmdId; timestamp=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"); type=$Type
         command_summary=$(if ($Command.Length -gt 120) { $Command.Substring(0, 120) + "..." } else { $Command })
@@ -241,7 +269,9 @@ function Generate-Rules {
         $candidates += @{id="clixml-stderr-filter"; description="Auto-filter CLIXML stderr noise"; triggers=@{type="any"}; fix=@{action="clixml_filter"}; confidence=[Math]::Min(100,$clixmlCount*5); hits=0; auto_generated=$true; generation_source="clixml $clixmlCount times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
     }
     $ampersandErrors = $errors | Where-Object { $_.patterns -contains "ampersand_in_cmd" -or ($_.type -in @("cmd","c") -and $_.command_summary -match '&&') }
-    if ($ampersandErrors.Count -ge 1 -and -not $existingRuleIds.ContainsKey("auto-cmd-escape-ampersand")) {
+    # Skip if any existing rule already handles this (manual or auto)
+    $hasAmpersandRule = $existingRuleIds.ContainsKey("auto-cmd-escape-ampersand") -or $existingRuleIds.ContainsKey("cmd-escape-ampersand")
+    if ($ampersandErrors.Count -ge 1 -and -not $hasAmpersandRule) {
         $candidates += @{id="auto-cmd-escape-ampersand"; description="Escape && in cmd mode"; triggers=@{type="cmd"; pattern_in_command="&&"}; fix=@{action="escape"; find="&&"; replace_with="^&^&"}; confidence=[Math]::Min(100,$ampersandErrors.Count*30); hits=0; auto_generated=$true; generation_source="ampersand $($ampersandErrors.Count) times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
     }
     $semicolonWslErrors = $errors | Where-Object { $_.patterns -contains "semicolon_in_ps_wsl" -or ($_.patterns -contains "semicolon_in_cmd" -and $_.command_summary -match "wsl") }
@@ -251,6 +281,27 @@ function Generate-Rules {
     $permErrors = $errors | Where-Object { $_.issue -eq "permission_denied" }
     if ($permErrors.Count -ge 3 -and -not $existingRuleIds.ContainsKey("auto-elevation-required")) {
         $candidates += @{id="auto-elevation-required"; description="Command needs elevation"; triggers=@{type="any"; error_in_stderr="access denied"}; fix=@{action="prepend"; text=""}; confidence=[Math]::Min(100,$permErrors.Count*20); hits=0; auto_generated=$true; generation_source="perm_denied $($permErrors.Count) times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
+    }
+    $timeoutErrors = $errors | Where-Object { $_.patterns -contains "potential_timeout" -or $_.patterns -contains "timeout_in_output" -or ($_.duration_ms -gt 20000 -and $_.exit_code -ne 0) }
+    if ($timeoutErrors.Count -ge 3 -and -not $existingRuleIds.ContainsKey("auto-git-credential-precheck")) {
+        $candidates += @{id="auto-git-credential-precheck"; description="Check git credential before push to avoid timeout"; triggers=@{type="any"; pattern_in_command="git push"}; fix=@{action="prepend"; text=""}; confidence=[Math]::Min(100,$timeoutErrors.Count*15); hits=0; auto_generated=$true; generation_source="timeout_errors $($timeoutErrors.Count) times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
+    }
+    # Auto-detect PowerShell && in wrong type (should be cmd, not powershell)
+    $psAmpersandErrors = $errors | Where-Object { $_.type -in @("powershell","p","user") -and $_.command_summary -match '&&' -and $_.exit_code -ne 0 }
+    $hasPsAmpersandRule = $existingRuleIds.ContainsKey("auto-ps-ampersand-to-cmd") -or $existingRuleIds.ContainsKey("ps-double-ampersand-to-cmd")
+    if ($psAmpersandErrors.Count -ge 1 -and -not $hasPsAmpersandRule) {
+        $candidates += @{id="auto-ps-ampersand-to-cmd"; description="Change PowerShell && to cmd type"; triggers=@{type="powershell"; pattern_in_command="&&"}; fix=@{action="change_type"; to_type="cmd"}; confidence=[Math]::Min(100,$psAmpersandErrors.Count*30); hits=0; auto_generated=$true; generation_source="ps_ampersand $($psAmpersandErrors.Count) times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
+    }
+    # Auto-detect Python f-string format specifier conflicts
+    $fstringErrors = $errors | Where-Object { $_.command_summary -match 'python' -and $_.command_summary -match ':<[0-9]' -and $_.exit_code -ne 0 }
+    $hasFstringRule = $existingRuleIds.ContainsKey("auto-fstring-format-to-cmd") -or $existingRuleIds.ContainsKey("ps-fstring-format-to-cmd")
+    if ($fstringErrors.Count -ge 1 -and -not $hasFstringRule) {
+        $candidates += @{id="auto-fstring-format-to-cmd"; description="Change Python f-string commands from PowerShell to cmd type"; triggers=@{type="powershell"; command_contains="python -c"; pattern_in_command=":<"}; fix=@{action="change_type"; to_type="cmd"}; confidence=[Math]::Min(100,$fstringErrors.Count*30); hits=0; auto_generated=$true; generation_source="fstring $($fstringErrors.Count) times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
+    }
+    # Auto-detect $env:$_ syntax errors
+    $envDollarErrors = $errors | Where-Object { $_.command_summary -match '\$env:\$_' -and $_.exit_code -ne 0 }
+    if ($envDollarErrors.Count -ge 1 -and -not $existingRuleIds.ContainsKey("auto-env-dollar-underscore") -and -not $existingRuleIds.ContainsKey("ps-env-dollar-underscore")) {
+        $candidates += @{id="auto-env-dollar-underscore"; description='Fix $env:$_ to ${env:$_} in PowerShell'; triggers=@{type="powershell"; command_contains='$env:$_'}; fix=@{action="escape"; find='$env:$_'; replace_with='${env:$_}'}; confidence=[Math]::Min(100,$envDollarErrors.Count*30); hits=0; auto_generated=$true; generation_source="env_dollar $($envDollarErrors.Count) times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
     }
     $toAdd = @()
     foreach ($cand in $candidates) {
@@ -293,7 +344,7 @@ function Test-RuleAgainstHistory {
         if ($shouldMatch) { $matched++ }
     }
     $total = $Errors.Count
-    if ($total -gt 0 -and ($matched / $total) -ge 0.1) {
+    if ($total -gt 0 -and ($matched / $total) -ge 0.05) {
         $result.passed = $true; $result.matched = $matched
         $result.bonus = [Math]::Min(30, [int](($matched / $total) * 50))
         $result.reason = "hit_rate=$([Math]::Round($matched * 100 / $total, 1))% matched=$matched total=$total"

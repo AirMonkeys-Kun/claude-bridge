@@ -190,7 +190,12 @@ try {
 
                 try { if ($resEvent) { $resEvent.Dispose() } } catch {}
                 $pipe.Close()
-            } catch { W "PipeSrv err: $($_.Exception.Message -replace '`r`n',' ')"; try { if ($pipe) { $pipe.Close() } } catch {} }
+            } catch {
+                # Suppress pipe error logging to avoid log flood on transient issues
+                # (NamedPipeServerStream ctor can fail when pipe name is still in use)
+                Start-Sleep -Milliseconds 200
+                try { if ($pipe) { $pipe.Close() } } catch {}
+            }
         }
     }).AddArgument($schedPipeName).AddArgument($fastQueueFile).AddArgument("Local\Cluster_Queue").AddArgument("Local\Cluster_Result").AddArgument($logFile).AddArgument($idleMaster)
     $pipeAsync = $pipePs.BeginInvoke()
@@ -254,8 +259,9 @@ while ($true) {
             foreach ($ck in $routingTable.Keys) { $uniqueDirs[$routingTable[$ck]] = $ck }
             foreach ($dir in $uniqueDirs.Keys) {
                 $chk = $uniqueDirs[$dir]
-                $hbF = Join-Path $ClusterDir "$dir\.heartbeat"
-                $lkF = Join-Path $ClusterDir "$dir\.lock"
+                # Try both naming conventions (V3: .watcher.*, V4: .*)
+                $hbF = if (Test-Path (Join-Path $ClusterDir "$dir\.watcher_heartbeat")) { Join-Path $ClusterDir "$dir\.watcher_heartbeat" } else { Join-Path $ClusterDir "$dir\.heartbeat" }
+                $lkF = if (Test-Path (Join-Path $ClusterDir "$dir\.watcher.lock")) { Join-Path $ClusterDir "$dir\.watcher.lock" } else { Join-Path $ClusterDir "$dir\.lock" }
                 $alive = $false; $wpid = $null; $hb = $null
                 if (Test-Path $lkF) { try { $wpid = [int]([System.IO.File]::ReadAllText($lkF,$utf8).Trim()) } catch {} }
                 if (Test-Path $hbF) {
@@ -430,7 +436,4 @@ while ($true) {
 
     # ── Prune ──
     if ($processedIds.Count -gt 200) {
-        $oldest = $processedIds.Keys | Sort-Object { $processedIds[$_] } | Select-Object -First ($processedIds.Count - 200)
-        foreach ($k in $oldest) { $processedIds.Remove($k) }
-    }
-}
+        

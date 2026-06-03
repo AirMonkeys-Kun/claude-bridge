@@ -44,4 +44,9 @@ __pycache__/
 Thumbs.db
 
 # ── Temp / scratch txt files ──
-wat
+watcher/*.txt
+!watcher/queue.txt
+
+# ── OS junk ──
+ehthumbs.db
+Desktop.ini

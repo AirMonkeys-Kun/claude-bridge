@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Claude Bridge Cluster — Worker 注册/启动/重启/状态管理脚本
 .DESCRIPTION
@@ -48,6 +48,7 @@ $allWorkers = @(
     @{ name = "network_bridge";  desc = "网络操作" }
     @{ name = "system_bridge";   desc = "系统服务" }
     @{ name = "wsl_bridge";      desc = "WSL/Linux" }
+    @{ name = "user_bridge";     desc = "用户上下文执行" }
 )
 
 $workers = if ($WorkerName) { $allWorkers | Where-Object { $_.name -eq $WorkerName } } else { $allWorkers }
@@ -55,6 +56,22 @@ $workers = if ($WorkerName) { $allWorkers | Where-Object { $_.name -eq $WorkerNa
 # ── 工具函数 ──
 function Write-Color { param([string]$text, [string]$color="White")
     Write-Host $text -ForegroundColor $color
+}
+
+# 检查多种命名约定的文件（V3/V4 兼容）
+function Get-FirstFile { param([string]$Dir, [string[]]$Names)
+    foreach ($n in $Names) {
+        $f = Join-Path $Dir $n
+        if (Test-Path $f) { return $f }
+    }
+    return $null
+}
+function Read-FirstFile { param([string]$Dir, [string[]]$Names)
+    foreach ($n in $Names) {
+        $f = Join-Path $Dir $n
+        if (Test-Path $f) { try { return [System.IO.File]::ReadAllText($f, [System.Text.UTF8Encoding]::new($false)).Trim() } catch {} }
+    }
+    return $null
 }
 
 function Get-TaskName { param([string]$wn)
@@ -134,8 +151,8 @@ function Invoke-Stop {
     Write-Color "=== 停止 Worker ===" "Cyan"
     Write-Color "注意：通过 taskkill 停止 worker，如 worker 处于 WaitForExit 可能延迟返回" "Yellow"
     foreach ($w in $workers) {
-        $lockFile = Join-Path (Get-WorkerDir $w.name) ".watcher.lock"
-        if (Test-Path $lockFile) {
+        $lockFile = Get-FirstFile (Get-WorkerDir $w.name) @(".watcher.lock", ".lock")
+        if ($lockFile) {
             try {
                 $pid = [int]([System.IO.File]::ReadAllText($lockFile, [System.Text.UTF8Encoding]::new($false)).Trim())
                 Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
@@ -170,19 +187,15 @@ function Invoke-Status {
     $allAlive = $true
     foreach ($w in $allWorkers) {
         $dir = Get-WorkerDir $w.name
-        $lockFile = Join-Path $dir ".watcher.lock"
-        $hbFile = Join-Path $dir ".watcher_heartbeat"
-        $pid = "—"
-        $hb = "—"
+        # 兼容两种命名约定：V3 模板用 .watcher.*，V4 自定义用 .*
+        $pidStr = Read-FirstFile $dir @(".watcher.lock", ".lock")
+        $hb = Read-FirstFile $dir @(".watcher_heartbeat", ".heartbeat")
+        $pid = if ($pidStr) { $pidStr } else { "—" }
+        $shortHb = if ($hb -and $hb.Length -gt 19) { $hb.Substring(0, 19) } else { $hb }
         $status = "❌ 离线"
 
-        if (Test-Path $lockFile) {
-            try { $pid = [int]([System.IO.File]::ReadAllText($lockFile, [System.Text.UTF8Encoding]::new($false)).Trim()) } catch {}
-        }
-        if (Test-Path $hbFile) {
+        if ($hb) {
             try {
-                $hb = [System.IO.File]::ReadAllText($hbFile, [System.Text.UTF8Encoding]::new($false)).Trim()
-                $shortHb = if ($hb.Length -gt 19) { $hb.Substring(0, 19) } else { $hb }
                 $hbTime = if ($shortHb -match '\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}') { [datetime]::ParseExact($matches[0], "yyyy-MM-dd HH:mm:ss", $null) } else { $null }
                 if ($hbTime -and ((Get-Date) - $hbTime).TotalSeconds -lt 60) {
                     $status = "✅ 运行中"

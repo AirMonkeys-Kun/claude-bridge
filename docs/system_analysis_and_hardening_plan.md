@@ -101,14 +101,15 @@ WSL路径已全部清除，每5分钟运行无意义
 
 ## 四、执行检查清单
 
-- [ ] Phase 1: 禁用 fix-wsl-paths 定时任务
-- [ ] Phase 1: 删除已完成的一次性任务 fix-wsl-paths-now
-- [ ] Phase 1: 归档 6 个重叠 fix 脚本
-- [ ] Phase 1: 清理 4 个临时结果文件
-- [ ] Phase 2: 添加 4 条新规则到 bridge_rules.json
+- [x] Phase 1: 禁用 fix-wsl-paths 定时任务 ✅ 2026-06-01
+- [x] Phase 1: 删除已完成的一次性任务 fix-wsl-paths-now ✅ 2026-06-01
+- [x] Phase 1: 归档 6 个重叠 fix 脚本 ✅ 2026-06-04 (已清理，仅 fix_progressbar.py 保留)
+- [x] Phase 1: 清理临时结果文件 ✅ 2026-06-04 (删除 15 r_*.json + 63 .path_fix_backup/ 碎片)
+- [x] Phase 2: 添加 4 条新规则到 bridge_rules.json ✅ 2026-06-04 (clixml 已存在，新增 3 条: python-utf8-encoding, path-wsx-to-admin, cmd-pipe-escape. 共 15 条规则 v3.0)
+- [x] Phase 2: 隔离危险 TI 脚本 ✅ 已从 watcher/ 移除
 - [ ] Phase 2: 创建统一健康检查脚本
-- [ ] Phase 2: 隔离危险 TI 脚本
-- [ ] Phase 3: 路径统一 (wsx → Administrator)
+- [ ] Phase 3: 路径统一 (wsx → Administrator) — 部分完成 (规则引擎自动替换)
+- [x] Phase 3: Watcher 稳定性增强 ✅ V15 FileSystemWatcher + V16 progress flush
 
 ---
 

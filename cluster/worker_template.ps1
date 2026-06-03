@@ -89,10 +89,23 @@ else { Write-Text -path $script:queueFile -content $idleQueue; Log "Queue reset"
 
 Log "Ready — polling 200ms"
 
+# Lock refresh counter (rewrites lock file every 50 loops ≈ 10s)
+$script:lockRefreshCount = 0
+
 # ── main loop ──
 while ($true) {
     # Heartbeat
     try { [System.IO.File]::WriteAllText($script:heartbeatFile, (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"), $script:utf8) } catch {}
+
+    # Periodic lock file refresh (every 50 loops ≈ 10s)
+    $script:lockRefreshCount++
+    if ($script:lockRefreshCount -ge 50) {
+        $script:lockRefreshCount = 0
+        try {
+            $oldPid = [int]([System.IO.File]::ReadAllText($lockFile, $script:utf8).Trim())
+            if ($oldPid -ne $PID) { [System.IO.File]::WriteAllText($lockFile, [string]$PID, $script:utf8) }
+        } catch { [System.IO.File]::WriteAllText($lockFile, [string]$PID, $script:utf8) }
+    }
 
     Start-Sleep -Milliseconds 200
     $queue = Read-Json -path $script:queueFile
@@ -147,7 +160,8 @@ while ($true) {
                 $escapedCmd = $rawCmd -replace '"', '\"'
                 $psi.Arguments = "-e bash -c `"$escapedCmd`""
             } else {
-                throw "Unknown type: $ctype"
+                # Unknown type: fallback to cmd for compatibility (e.g. "query")
+                $psi.FileName = "cmd.exe"; $psi.Arguments = "/c $rawCmd"
             }
             $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
             $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true

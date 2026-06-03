@@ -56,7 +56,7 @@ function ExecCmd($cid, $raw, $ctype, $timeout) {
         } catch { $errorMsg=$_.Exception.Message; TLog "  [$cid] EX: $errorMsg" }
     }
     $elapsed=[int]((Get-Date)-$t0).TotalMilliseconds
-    return @{state=if ($errorMsg){"error"}else{"done"}; id=$cid; e=$exitCode; o=$stdout; s=$stderr; err=$errorMsg; d=$elapsed; ts=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
+    return @{state=if ($errorMsg){"error"}else{"done"}; id=$cid; cmd_id=$cid; e=$exitCode; exit_code=$exitCode; o=$stdout; stdout=$stdout; s=$stderr; stderr=$stderr; err=$errorMsg; error=$errorMsg; d=$elapsed; duration_ms=$elapsed; ts=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
 }
 function WriteResult($res) {
     $jsonStr = $res | ConvertTo-Json -Depth 1 -Compress
@@ -80,14 +80,32 @@ $null=$filePs.AddScript({
     function TLogf($m) { try { $t=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"); [System.IO.File]::AppendAllText($lf,"$t | [FILE] $m`r`n",$utf8) } catch {} }
     function ReadJf($p) { if (-not (Test-Path $p)) { return $null }; for ($i=0; $i -lt 3; $i++) { try { $t=[System.IO.File]::ReadAllText($p,$utf8); if ([string]::IsNullOrWhiteSpace($t)) { return $null }; return ($t|ConvertFrom-Json) } catch { if ($i -eq 2) { return $null }; Start-Sleep -Milliseconds 20 } } }
     function WriteFf($p,$c) { for ($i=0; $i -lt 3; $i++) { try { [System.IO.File]::WriteAllText($p,$c,$utf8); return } catch { if ($i -eq 2) { throw }; Start-Sleep -Milliseconds 20 } } }
-    TLogf "File monitor started"; $lastId=""
+    TLogf "File monitor started"; $lastId=""; $contentCache=@{}
     $fileEvent=$null; try { $fileEvent=[System.Threading.EventWaitHandle]::OpenExisting("Local\Cluster_Wkr_wsl") } catch {}
     while ($true) {
         try { [System.IO.File]::WriteAllText($hb,(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"),$utf8) } catch {}
         if ($fileEvent) { $null=$fileEvent.WaitOne(500) } else { Start-Sleep -Milliseconds 200 }
         $q=ReadJf $qf
         if ($q -and $q.state -eq "pending" -and $q.cmd_id -ne "" -and $q.cmd_id -ne $lastId) {
-            $lastId=$q.cmd_id; $cid=$q.cmd_id; $raw=$q.command; $ctype=$q.type; $timeout=30
+            # V13: Content-hash dedup
+            $raw=$q.command
+            if ($raw -and $raw.Length -gt 0) {
+                $contentKey = $raw.Substring(0, [Math]::Min(300, $raw.Length))
+                if ($contentCache.ContainsKey($contentKey)) {
+                    $cachedAge = [int]((Get-Date) - $contentCache[$contentKey]).TotalMilliseconds
+                    if ($cachedAge -lt 120000) {
+                        TLogf "  [$($q.cmd_id)] CONTENT DEDUP HIT — skipping (${cachedAge}ms ago)"
+                        WriteFf $qf '{"v":3,"state":"idle"}'
+                        continue
+                    }
+                }
+                $contentCache[$contentKey] = Get-Date
+                if ($contentCache.Count -gt 50) {
+                    $sorted = $contentCache.GetEnumerator() | Sort-Object { $_.Value } | Select-Object -First 10
+                    foreach ($e in $sorted) { $contentCache.Remove($e.Key) }
+                }
+            }
+            $lastId=$q.cmd_id; $cid=$q.cmd_id; $ctype=$q.type; $timeout=30
             if ([string]::IsNullOrWhiteSpace($ctype)) { $ctype="powershell" }
             if ($q.timeout -gt 0) { $timeout=$q.timeout }; if ($q.t) { $ctype=$q.t }; if ($q.to) { $timeout=$q.to }
             TLogf "[$cid] type=$ctype cmd=$raw"; WriteFf $qf ('{"v":3,"state":"r","id":"'+$cid+'"}')

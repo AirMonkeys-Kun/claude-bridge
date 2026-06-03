@@ -1,0 +1,26 @@
+﻿{
+    "workers":  [
+                    {
+                        "pid":  22892,
+                        "pipe":  "Cluster_Wkr_generic_g1",
+                        "id":  "g1",
+                        "queue":  "cluster\\worker_generic_g1\\queue.txt",
+                        "started":  "2026-06-04 02:02:28"
+                    },
+                    {
+                        "pid":  23324,
+                        "pipe":  "Cluster_Wkr_generic_g2",
+                        "id":  "g2",
+                        "queue":  "cluster\\worker_generic_g2\\queue.txt",
+                        "started":  "2026-06-04 02:02:28"
+                    },
+                    {
+                        "pid":  30284,
+                        "pipe":  "Cluster_Wkr_generic_g3",
+                        "id":  "g3",
+                        "queue":  "cluster\\worker_generic_g3\\queue.txt",
+                        "started":  "2026-06-04 02:02:28"
+                    },
+                    {
+                        "pid":  33684,
+                        "pipe":  "Cluster_Wkr_generic_g4

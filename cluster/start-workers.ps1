@@ -29,7 +29,10 @@ function Write-File($path, $content) {
     [System.IO.File]::WriteAllText($path, $content, $utf8)
 }
 
-$workerDirs = @("file_bridge","registry_bridge","process_bridge","network_bridge","system_bridge","wsl_bridge")
+$workerDirs = @("file_bridge","process_bridge","system_bridge","wsl_bridge")
+# 注意: network_bridge 和 registry_bridge 已从自动启动中移除
+# 它们从未收到任何命令（0 结果文件），且没有代码路径会写入它们的队列
+# 如需重新启用, 加回 "network_bridge","registry_bridge"
 $idleJson = '{"state":"idle","cmd_id":"","command":"","type":""}'
 
 # === Phase 1: Find existing tasks ===
@@ -139,11 +142,11 @@ foreach ($w in $workerDirs) {
     $hbFile = Join-Path $clusterDir "$w\.watcher_heartbeat"
     $lockFile = Join-Path $clusterDir "$w\.watcher.lock"
     $hb = Read-File $hbFile
-    $pid = Read-File $lockFile
+    $lockPid = Read-File $lockFile
     if ($hb) {
-        Log "  $w : PID=$pid HB=$hb [OK]"
+        Log "  $w : PID=$lockPid HB=$hb [OK]"
     } else {
-        Log "  $w : PID=$pid HB=$hb [NO HEARTBEAT]"
+        Log "  $w : PID=$lockPid HB=$hb [NO HEARTBEAT]"
         $allOk = $false
     }
 }

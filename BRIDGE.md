@@ -1,6 +1,6 @@
 # Claude Bridge Cluster — 通信桥技术文档
 
-> 最后更新：2026-06-01 | 版本：v4
+> 最后更新：2026-06-04 | 版本：v17
 
 ---
 
@@ -23,39 +23,43 @@
 ┌─────────────────────────────────────────────────────────┐
 │                    Claude (本 Agent)                      │
 │  写入 queue.txt → 轮询 r_{cmd_id}.json 获取结果          │
-└──────────────────────┬──────────────────────────────────┘
-                       │ 文件 IPC
-┌──────────────────────▼──────────────────────────────────┐
-│                    Master Scheduler                       │
-│              (master_scheduler.ps1, 可选路由层)           │
-│   读取 master_queue.txt → 按 channel 分发到 worker       │
-└──────┬──────┬──────┬──────┬──────┬──────┬──────┬───────┘
-       │      │      │      │      │      │      │
-       ▼      ▼      ▼      ▼      ▼      ▼      ▼
-   ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌──────────┐
-   │  file  │ │registry│ │process │ │network │ │ system │ │  wsl   │ │ watcher  │
-   │_bridge │ │_bridge │ │_bridge │ │_bridge │ │_bridge │ │_bridge │ │(监视器)  │
-   └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └────────┘ └──────────┘
+└──────────┬──────────────────────┬───────────────────────┘
+           │ 文件 IPC              │ 文件 IPC
+┌──────────▼──────────┐  ┌────────▼──────────────────────┐
+│ watcher.ps1 v17     │  │ scheduler.ps1 (并行分发)       │
+│ ScriptBlock ~10ms   │  │ Named Pipe IPC + RunspacePool │
+│ FSW event-driven    │  │ master_queue.txt              │
+│ content dedup       │  │ EventWaitHandle zero-sleep    │
+│ inflight guard      │  │ rule engine v3.0              │
+└─────────────────────┘  └──┬───┬───┬───┬───┬───────────┘
+                             │   │   │   │   │
+                             ▼   ▼   ▼   ▼   ▼  (Named Pipes)
+                     ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐
+                     │ file │ │proc. │ │system│ │ wsl  │ │ user │
+                     │_brdg │ │_brdg │ │_brdg │ │_brdg │ │_brdg │
+                     │  ✓   │ │  ✓   │ │  ✓   │ │  ✓   │ │  ✓   │
+                     └──────┘ └──────┘ └──────┘ └──────┘ └──────┘
+                       ✓=active  (network/registry offline)
 ```
 
 ### 核心概念
 
-- **Worker（工人）**：每个 worker 是一个独立的 PowerShell 进程，专职处理一个领域
-- **IPC**：所有通信通过文件系统完成（queue.txt + 结果 JSON 文件）
-- **Watcher**：每个 worker 内部包含一个 watcher 主循环（200ms 轮询 queue.txt）
-- **Master Scheduler**：（可选）中间路由层，可从 master_queue.txt 读取并按 channel 分发
-- **直接模式**：Claude 可直接写入任意 worker 的 queue.txt，绕过 scheduler
+- **Watcher（主桥）**：`watcher.ps1` v17，FileSystemWatcher 事件驱动。V17 新增 ScriptBlock 进程内执行（~10ms），告别子进程生成（~150ms）。回退到子进程以确保安全。
+- **Scheduler（并行调度）**：`cluster/scheduler.ps1` — Named Pipe IPC 连接到所有 worker，RunspacePool 并行分发，EventWaitHandle 零睡眠事件循环。支持通过 `master_queue.txt` 进行批量命令。
+- **Worker（工人）**：独立 PowerShell 进程，Named Pipe Server 监听（`Cluster_Wkr_{name}`）。V4 智能执行：ScriptBlock 进程内用于 PS，子进程用于 cmd/wsl。
+- **IPC**：两种路径：(1) 快速路径 — watcher ScriptBlock 进程内（~10ms）；(2) 批量路径 — scheduler Named Pipe → worker ScriptBlock（亚毫秒 IPC + ~10ms 执行）。
 
-### Worker 类型
+### Worker 类型 (7 个 Worker, 5 个活跃)
 
-| Worker | 目录 | 职责 |
-|--------|------|------|
-| file_bridge | `cluster/file_bridge/` | 文件读写、下载、属性操作 |
-| process_bridge | `cluster/process_bridge/` | 进程管理、命令行执行、状态检查 |
-| network_bridge | `cluster/network_bridge/` | 网络操作、端口、防火墙、DNS |
-| system_bridge | `cluster/system_bridge/` | 系统服务、计划任务、配置 |
-| registry_bridge | `cluster/registry_bridge/` | 注册表操作 |
-| wsl_bridge | `cluster/wsl_bridge/` | WSL/Linux 操作（当前不可用） |
+| Worker | 目录 | 状态 | 职责 |
+|--------|------|------|------|
+| file_bridge | `cluster/file_bridge/` | ✅ 运行中 | 文件读写、下载、属性操作 |
+| process_bridge | `cluster/process_bridge/` | ✅ 运行中 | 进程管理、命令行执行、状态检查 |
+| system_bridge | `cluster/system_bridge/` | ✅ 运行中 | 系统服务、计划任务、配置 |
+| user_bridge | `cluster/user_bridge/` | ✅ 运行中 | 用户上下文执行（token duplication） |
+| wsl_bridge | `cluster/wsl_bridge/` | ✅ 运行中 | WSL/Linux 操作 |
+| network_bridge | `cluster/network_bridge/` | ❌ 离线 | 无 worker.ps1 (网络操作、端口、DNS) |
+| registry_bridge | `cluster/registry_bridge/` | ❌ 离线 | 无 worker.ps1 (注册表操作) |
 
 ### 启动方式
 
@@ -95,11 +99,11 @@ pending → running → (done / error)
 
 | type | 说明 | 执行方式 |
 |------|------|----------|
-| `powershell` | PowerShell 命令 | 通过 `-EncodedCommand` 启动子进程（有 CLIXML 在 stderr）|
-| `powershell_text` | PowerShell 命令（无 CLIXML）| 通过 `-Command "..."` 启动子进程（推荐 ✅）|
-| `cmd` | CMD 命令 | 通过 `cmd /c` 启动子进程 |
-| `wsl` | WSL bash 命令 | 通过 `wsl.exe -e bash -c` 启动（⚠️ 当前不可用）|
-| `__INLINE__` | 内联执行 | 在当前 worker 进程中用 `ScriptBlock.Create` 执行 |
+| `powershell_text` | PowerShell（推荐 ✅，默认）| 通过 `-Command "..."` 启动子进程，无 CLIXML 噪声 |
+| `powershell` | PowerShell 命令 | 通过 `-EncodedCommand` 启动子进程（⚠️ 有 CLIXML 在 stderr）|
+| `cmd` | CMD 命令 | 通过 `cmd /c` 启动子进程（⚠️ 子进程输出可能截断）|
+| `user` | 用户上下文执行 | 转发到 `user_bridge` worker（token duplication）|
+| `__INLINE__` | 内联执行 | 在当前 watcher 进程中用 `ScriptBlock.Create` 执行 |
 
 ### 响应格式（r_{cmd_id}.json）
 
@@ -138,13 +142,15 @@ cluster/{worker_name}/
 ├── r_{cmd_id}.json      # 各命令的执行结果
 ```
 
-### 模板文件
+### Worker 实现
 
-所有 worker 使用同一模板：`cluster/worker_template.ps1`
+Worker 由 `restart_bridge.ps1` 或 Scheduled Task 启动。每个活跃 worker 有自己的 `worker.ps1`（非统一模板，各有差异）：
+- `file_bridge/worker.ps1` — 使用 ScriptBlock 执行 powershell，ReadToEnd() 执行 cmd
+- `wsl_bridge/worker.ps1` — WSL bash 管道
+- `user_bridge/worker.ps1` — token duplication 用户上下文
+- `system_bridge/worker.ps1` / `process_bridge/worker.ps1` — 系统操作
 
-主要参数：
-- `-WorkerName`：worker 名称（如 `file_bridge`）
-- `-BridgeBase`：bridge 根目录（自动检测或手动指定）
+参考模板：`cluster/worker_template.ps1`（有 V4 ReadToEndAsync 修复，但未用于活跃 worker）
 
 ### 内联执行（INLINE）
 
@@ -164,39 +170,28 @@ $pids | ForEach-Object { "Trying PID ${_}: " + ... }
 
 ---
 
-## 4. Master Scheduler
+## 4. Scheduler
 
-`master_scheduler.ps1` 是一个可选路由层，提供：
-- **channel 路由**：按 channel 字段自动分发到对应 worker
-- **健康检查**：`__STATUS__` 命令返回所有 worker 状态报告
-- **结果等待**：自动轮询 worker 结果并汇总
-- **去重**：防止同一 cmd_id 被重复分发
+`cluster/scheduler.ps1` — **V17 恢复运行**。提供 Named Pipe IPC + RunspacePool 并行分发。通过 `master_queue.txt` 接收批量命令，通过 Named Pipes 向所有 worker 同时发送，EventWaitHandle 零睡眠事件循环。
 
-### 使用方式
+### 两条路径
 
-通过 `master_queue.txt` 提交命令：
-
-```json
-{
-  "state": "pending",
-  "cmd_id": "my_task_001",
-  "channel": "process",
-  "command": "Get-Process | Select-Object -First 5",
-  "type": "powershell",
-  "timeout": 30
-}
-```
+| 路径 | 延迟 | 适用场景 |
+|------|------|---------|
+| **快速路径**: watcher ScriptBlock 进程内 | ~10ms | 单条 powershell 命令 |
+| **批量路径**: scheduler → Named Pipe → worker | ~10ms + 亚毫秒 IPC | 并行批量命令 |
 
 ### channel 映射
 
-| channel | 路由到 | 说明 |
+| channel | 路由到 | 状态 |
 |---------|--------|------|
-| `file` | file_bridge | 文件操作 |
-| `registry` | registry_bridge | 注册表操作 |
-| `process` | process_bridge | 进程管理 |
-| `network` | network_bridge | 网络操作 |
-| `system` | system_bridge | 系统服务 |
-| `wsl` | wsl_bridge | WSL/Linux |
+| `file` | file_bridge | ✅ 活跃 |
+| `registry` | registry_bridge | ❌ 离线 |
+| `process` | process_bridge | ✅ 活跃 |
+| `network` | network_bridge | ❌ 离线 |
+| `system` | system_bridge | ✅ 活跃 |
+| `wsl` | wsl_bridge | ✅ 活跃 |
+| `user` | user_bridge | ✅ 活跃（通过 watcher 转发）|
 
 ---
 
@@ -257,15 +252,20 @@ ForEach-Object { "Trying PID ${_}: done" }
 - 使用 `Stop-Process -Id $pid -Force` 替代 `taskkill`
 - 或通过 Scheduled Task 重启（系统会自动清理旧进程）
 
-### 5.4 WSL Bridge 不可用
+### 5.4 WSL Bridge 状态
 
-**问题**：`wsl_test_01` 返回 `WSL_E_LOCAL_SYSTEM_NOT_SUPPORTED`。
+wsl_bridge worker 正在运行（有心跳），但 WSL 命令的可用性取决于主机 WSL 配置。
+过去报告 `WSL_E_LOCAL_SYSTEM_NOT_SUPPORTED` 错误，需要在主机侧修复 WSL 配置。
 
-**原因**：WSL 未在主机上正确配置（可能未安装或系统账户不支持 WSL）。
+### 5.5 离线 Worker
 
-**状态**：待主机侧修复 WSL 配置。当前 `wsl_bridge` worker 存活但不可用。
+**network_bridge** 和 **registry_bridge** 无 worker.ps1，处于离线状态。如需恢复：从 `worker_template.ps1` 克隆并实现对应的执行逻辑。
 
-### 5.5 SYSTEM 账户下 Get-AppxPackage 超时
+### 5.6 Scheduler — V17 已恢复
+
+`cluster/scheduler.ps1` 在 V17 中恢复运行。提供 Named Pipe IPC + RunspacePool 并行分发。单条命令通过 watcher ScriptBlock 快速路径（~10ms），批量命令可通过 `master_queue.txt` 实现并行执行。
+
+### 5.7 SYSTEM 账户下 Get-AppxPackage 超时
 
 **问题**：以 SYSTEM 身份运行的 worker 执行 `Get-AppxPackage -AllUsers` 会超时。
 
@@ -280,22 +280,26 @@ Get-AppxPackage -AllUsers | Where-Object { $_.Name -like '*Codex*' }
 Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like '*Codex*' }
 ```
 
-### 5.6 Bootstrap 死锁 — 全部 Worker 停机后无法远程恢复
+### 5.8 Bootstrap 死锁 — 全部停机后无法远程恢复
 
-**问题**：当所有 worker 进程被杀或崩溃后，Claude 无法通过桥接系统执行任何命令（所有执行通道均不可用），形成死锁。
+**问题**：当 watcher 和所有 worker 停止后，Claude 无法通过桥接系统执行命令（所有通道均不可用），形成死锁。
 
-**原因**：桥接系统依赖存活的 worker 来执行命令。若全部 worker 停止，没有任何机制能远程重启它们。
+**原因**：Linux VM 无法直接启动 Windows 进程。没有 bridge 就没有 Windows 命令执行能力。
 
-**解决方案**（选择其一）：
+**恢复方法**（在 Windows 主机上手动执行）：
 
-**方案 A：手动启动**（推荐）
-以管理员身份运行：
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File D:\zebbingo\claude-bridge\cluster\start-workers.ps1
+# 方法 1: 使用 restart_bridge.ps1 (推荐，V16)
+powershell -NoProfile -ExecutionPolicy Bypass -File "D:\zebbingo\tools\claude-bridge\restart_bridge.ps1"
+
+# 方法 2: 仅重启 watcher
+powershell -NoProfile -ExecutionPolicy Bypass -File "D:\zebbingo\tools\claude-bridge\watcher\start_watcher_only.ps1"
+
+# 方法 3: 一键重启（中文）
+D:\zebbingo\tools\claude-bridge\一键重启.bat
 ```
 
-**方案 B：V2 Guardian（自动恢复）**
-注册一个 Guardian Scheduled Task，每 2 分钟检查所有 worker 心跳，发现离线时自动重启：
+**预防**：Guardian Scheduled Task（V2 设计）可每 2 分钟检查心跳并自动恢复，但当前 watchdog.bat 已禁用。
 ```cmd
 # 以管理员身份运行
 D:\zebbingo\claude-bridge\cluster\register_v2_guardian.bat
@@ -306,7 +310,7 @@ Guardian 机制说明：
 - `register_v2_guardian.bat` — 注册为 Scheduled Task（每 2 分钟运行一次，SYSTEM 权限）
 - 检测到心跳过期 → 杀残留进程 → 重置队列 → 启动 Scheduled Tasks
 
-### 5.7 编码问题导致 register-workers.ps1 通过子进程执行失败
+### 5.9 编码问题导致 register-workers.ps1 通过子进程执行失败
 
 **问题**：通过桥接系统执行 `register-workers.ps1`（含中文字符）时，PowerShell 解析器报错。
 
@@ -316,7 +320,7 @@ Guardian 机制说明：
 - 直接在本地控制台以管理员身份运行 `register-workers.ps1`
 - 或通过 `start-workers.ps1` 绕过注册步骤直接启动
 
-### 5.8 SYSTEM 账户下 Get-ScheduledTask 超时
+### 5.10 SYSTEM 账户下 Get-ScheduledTask 超时
 
 **问题**：以 SYSTEM 身份运行的 worker 执行 `Get-ScheduledTask -TaskName 'BridgeGuardian-V2'` 超时。
 
@@ -445,6 +449,24 @@ Get-ChildItem D:\zebbingo\claude-bridge\cluster\*\watcher_heartbeat | Select-Obj
 ---
 
 ## 8. CHANGELOG
+
+### v17 (2026-06-04) — ScriptBlock 快速路径 + Scheduler 恢复
+
+- **watcher.ps1**: ScriptBlock 进程内执行，用于 powershell/powershell_text/inline 类型（~10ms vs ~150ms 子进程生成）。利用 `[ScriptBlock]::Create()` 镜像 worker.ps1 V4 智能执行。失败时回退到子进程以确保安全。
+- **Scheduler 恢复**: `cluster/scheduler.ps1` 恢复运行。Named Pipe IPC + RunspacePool 并行分发给所有 worker。EventWaitHandle 零睡眠事件循环。通过 `master_queue.txt` 接收批量命令。
+- **restart_bridge.ps1**: 新增 scheduler 启动 + 验证。现在启动 3 层：watcher → scheduler → workers。
+- **架构**: 现在有两条路径——快速路径（watcher ScriptBlock，~10ms）和批量路径（scheduler Named Pipe → worker ScriptBlock，亚毫秒 IPC）。
+
+### v16 (2026-06-04) — 进度刷新恢复 + 规则引擎扩展
+
+- **恢复**: 进度刷新 — watcher 在执行长时间命令时每 5 秒写入 `r_{cid}_progress.json`（包含已用时间/运行状态）以让调用方看到 liveness，避免 ReadToEndAsync 的"黑盒"问题
+- **修复**: Log 函数静默吞错误 — 增加 fallback 日志 `.watcher_fallback.log` 以便诊断日志写入失败的原因
+- **新增**: 3 条桥接规则 (`bridge_rules.json` v3.0, 共 15 条规则):
+  - `python-utf8-encoding` — cmd 下 python 命令自动切换为 powershell 类型
+  - `path-wsx-to-admin` — 自动替换旧机器路径 C:\Users\wsx → C:\Users\Administrator
+  - `cmd-pipe-escape` — cmd 模式下 | 自动转义为 ^|
+- **清理**: 删除 95 个诊断碎片文件 (`.path_fix_backup/` 63 个 + 残留 `r_*.json` 15 个)
+- **文档**: 硬化计划 Phase 1-2 完成 (禁用冗余任务、归档重叠脚本、添加规则)
 
 ### v4 (2026-06-01) — 多行输出最终修复 + Guardian 注册
 

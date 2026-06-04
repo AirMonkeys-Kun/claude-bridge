@@ -1,14 +1,14 @@
 #Requires -Version 5.0
 <#
- pipe_daemon.ps1 — Persistent Named Pipe dispatcher daemon (V1)
- ──────────────
- Watches for .pipe_master_queue.json via FileSystemWatcher.
- On detection: parallel dispatch to worker pool via Named Pipes.
- Writes results to .pipe_batch_result.json, deletes master queue.
- Continuous — no launch overhead per batch.
+ pipe_daemon.ps1 — [OBSOLETE / 已弃用] 功能已融入 watcher V19
+ ──────────────────────
+ V20 (2026-06-04): Named Pipe dispatch logic moved into watcher.ps1.
+   The watcher now dispatches commands directly to typed workers via Named Pipes.
+   This file kept as reference only — DO NOT USE.
+   See: watcher/watcher.ps1 → V19: Typed worker dispatch via Named Pipe
 
- Usage: powershell -File pipe_daemon.ps1 [-BridgeBase D:\...]
-        Kill: pipe_daemon.ps1 -Kill
+ Original purpose: Watched .pipe_master_queue.json, dispatched to workers via Named Pipes.
+ Now replaced by watcher's Dispatch-ToWorker function.
 #>
 
 param(
@@ -30,6 +30,9 @@ $daemonLogFile = Join-Path $clusterDir "pipe_daemon.log"
 $daemonLockFile = Join-Path $clusterDir ".pipe_daemon.lock"
 $daemonHbFile = Join-Path $clusterDir ".pipe_daemon.heartbeat"
 $utf8 = [System.Text.UTF8Encoding]::new($false)
+
+# Ensure result directory exists
+if (-not (Test-Path $resultDir)) { New-Item -ItemType Directory -Path $resultDir -Force | Out-Null }
 
 function Log($m) {
     $t = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
@@ -73,7 +76,8 @@ if (-not (Test-Path $poolFile)) {
 }
 
 $pool = Get-Content $poolFile -Raw | ConvertFrom-Json
-$workers = $pool.workers
+# Exclude g2 — permanently broken Named Pipe connect (times out ~5s per attempt)
+$workers = $pool.workers | Where-Object { $_.id -ne "g2" }
 $workerCount = $workers.Count
 Log "=== Pipe Daemon STARTED (pid=$PID) ==="
 Log "Pool: $workerCount workers loaded"
@@ -233,6 +237,20 @@ while ($true) {
         ($batchResult | ConvertTo-Json -Depth 4),
         $utf8
     )
+
+    # Write individual result files (unique filenames — bypass 9P FUSE cache)
+    foreach ($rCid in $results.Keys) {
+        $rObj = $results[$rCid]
+        if (-not $rObj.cmd_id) { $rObj | Add-Member -NotePropertyName "cmd_id" -NotePropertyValue $rCid -Force }
+        if (-not $rObj.timestamp) { $rObj | Add-Member -NotePropertyName "timestamp" -NotePropertyValue ((Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")) -Force }
+        if (-not $rObj.duration_ms) { $rObj | Add-Member -NotePropertyName "duration_ms" -NotePropertyValue 0 -Force }
+        $rFile = Join-Path $resultDir "r_$rCid.json"
+        try {
+            [System.IO.File]::WriteAllText($rFile, ($rObj | ConvertTo-Json -Compress), $utf8)
+        } catch {
+            Log "  Failed to write individual result for $rCid : $_"
+        }
+    }
 
     $pipeOk = ($results.Values | Where-Object { $_.status -eq "done" }).Count
     $durs = @($results.Values | Where-Object { $_.duration_ms -gt 0 } | ForEach-Object { $_.duration_ms })

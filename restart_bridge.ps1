@@ -301,4 +301,92 @@ foreach ($w in $activeWorkers) {
             "-NoProfile", "-ExecutionPolicy", "Bypass",
             "-File", $workerScript,
             "-WorkerDir", (Join-Path $clusterDir $w)
-    
+        )
+        Log "  [DIRECT] $w launching..."
+    } else {
+        Log "  [DIRECT] $w SKIP (no worker.ps1)"
+    }
+}
+
+# ======================================================
+# Step 6: Verify
+# ======================================================
+Log "=== Step 6: Verify (waiting 12s) ==="
+Start-Sleep -Seconds 12
+
+$allOk = $true
+
+# -- Watcher --
+$foundWatcherHb = Check-File $watcherDir @(".watcher_heartbeat", ".heartbeat")
+$foundWatcherLock = Check-File $watcherDir @(".watcher.lock", ".lock")
+
+if ($foundWatcherHb) {
+    Log "  WATCHER: PID=$foundWatcherLock HB=$foundWatcherHb [OK]"
+} else {
+    Log "  WATCHER: [NO HEARTBEAT]"
+    if (Test-Path $debugErr) {
+        $errText = [System.IO.File]::ReadAllText($debugErr, $utf8)
+        if ($errText.Trim().Length -gt 0) {
+            Log "  WATCHER STDERR: $errText"
+        } else {
+            Log "  WATCHER STDERR: (empty)"
+        }
+    }
+    if (Test-Path $debugLog) {
+        $logText = [System.IO.File]::ReadAllText($debugLog, $utf8)
+        if ($logText.Trim().Length -gt 0) {
+            Log "  WATCHER STDOUT/LOG (first 2000 chars):"
+            $logText.Substring(0, [Math]::Min(2000, $logText.Length)) -split "`r`n|`n" | ForEach-Object {
+                Log "    | $_"
+            }
+        } else {
+            Log "  WATCHER STDOUT: (empty)"
+        }
+    }
+    $allOk = $false
+}
+
+# -- Scheduler --
+$foundSchedHb = Check-File $clusterDir @(".heartbeat", ".scheduler_heartbeat")
+$foundSchedLock = Check-File $clusterDir @(".scheduler.lock")
+if ($foundSchedHb) {
+    Log "  SCHEDULER: HB=$foundSchedHb [OK]"
+} else {
+    Log "  SCHEDULER: [NO HEARTBEAT] (may have crashed or using different naming)"
+}
+
+# -- Workers (check both naming conventions) --
+foreach ($w in $allWorkers) {
+    $foundHb = Check-File (Join-Path $clusterDir $w) @(".heartbeat", ".watcher_heartbeat")
+    $foundLock = Check-File (Join-Path $clusterDir $w) @(".lock", ".watcher.lock")
+    $isActive = $w -in $activeWorkers
+
+    if ($foundHb) {
+        if ($isActive) {
+            Log "  $w : PID=$foundLock HB=$foundHb [OK]"
+        } else {
+            Log "  $w : PID=$foundLock HB=$foundHb [IDLE]"
+        }
+    } else {
+        if ($isActive) {
+            Log "  $w : [NO HEARTBEAT]"
+            $allOk = $false
+        } else {
+            Log "  $w : [SKIP] (inactive)"
+        }
+    }
+}
+
+# ======================================================
+# Summary
+# ======================================================
+Log "=== Summary ==="
+if ($allOk) {
+    Log "  ALL SERVICES RUNNING"
+} else {
+    Log "  SOME SERVICES DOWN -- see above for details"
+    Log "  Check debug logs:"
+    Log "    $debugLog"
+    Log "    $debugErr"
+}
+Log "=== Done ==="

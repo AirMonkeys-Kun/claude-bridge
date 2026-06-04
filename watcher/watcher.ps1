@@ -1,7 +1,11 @@
 #Requires -Version 5.0
 <#
- Claude Bridge v17 — ScriptBlock in-process execution + scheduler IPC
+ Claude Bridge v19 — Named Pipe dispatch to typed workers
  ──────────────────────────
+ • V19: Typed worker dispatch via Named Pipe — watcher dispatches commands to
+   typed workers (generic×4, file×4, process×2, system×2, wsl×1, user×1) via
+   Named Pipes. Falls back to in-process ScriptBlock/subprocess if no worker.
+ • V18: (internal) Unified worker pool development
  • V17: ScriptBlock in-process fast path for powershell/powershell_text/inline
    types — uses [ScriptBlock]::Create() for ~10ms execution instead of
    spawning powershell.exe subprocess (~150ms).  Mirrors worker.ps1 V4
@@ -17,6 +21,12 @@
  • Inflight guard: only one command executes at a time
  • HostLoopMode housekeeping: auto-strips hostLoopMode=true from
    session JSON files every ~60s (fixes WSL path crash root cause)
+ • V21: Named Pipe Async Dispatch — commands sent to typed workers via
+   Named Pipes with inflight tracking for concurrent execution.
+   Queue resets to idle immediately after dispatch.
+	 V21 note: $pipeDispatched guard (line 755) prevents fall-through to result processing.
+	           Inflight tracking (Check-InflightResults) monitors completion via r_{cid}.json.
+	           V2.2: worker adds progress file during long subprocess commands.
 #>
 
 $script:baseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -34,6 +44,14 @@ $script:contentDedupMaxSize = 100
 $script:inflightCmdId = ""     # V13: currently executing cmd_id
 $script:inflightSince = $null  # V13: when inflight started
 $script:inflightTimeout = 300  # V13: max seconds a command can be inflight
+
+# ── V21: Self-upgrade tracking — detect watcher.ps1 file changes ──
+$script:watcherScriptPath = $MyInvocation.MyCommand.Path
+$script:watcherScriptLastWrite = (Get-Item $script:watcherScriptPath).LastWriteTime
+$script:watcherStartTime = Get-Date
+$script:selfUpgradeCounter = 0
+$script:selfUpgradeCheckInterval = 50  # check every ~50 main-loop iterations (~2.5s)
+$script:restartFlagFile = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) ".graceful_restart"
 
 # ── helpers (defined first; Log is used by rule engine loading below) ──
 
@@ -264,50 +282,79 @@ Log "V15 FileSystemWatcher initialized — event-driven queue monitoring (v16 ex
 
 # ── V13: Content-hash dedup — prevents re-executing identical commands ──
 function Add-ContentDedup { param([string]$CmdText, [string]$CmdId)
-    if ([string]::IsNullOrWhiteSpace($CmdText)) { return }
-    $key = $CmdText.Substring(0, [Math]::Min(300, $CmdText.Length))
-    $script:contentDedupCache[$key] = @{cmd_id=$CmdId; timestamp=(Get-Date)}
-    if ($script:contentDedupCache.Count -gt $script:contentDedupMaxSize) {
-        $sorted = $script:contentDedupCache.GetEnumerator() | Sort-Object { $_.Value.timestamp }
-        $toRemove = $sorted | Select-Object -First ($script:contentDedupCache.Count - $script:contentDedupMaxSize)
-        foreach ($e in $toRemove) { $script:contentDedupCache.Remove($e.Key) }
-    }
+    # V21: DISABLED — command-text dedup caused silent result reuse
+    # Different cmd_ids with same text both execute independently
 }
 function Get-ContentDedup { param([string]$CmdText)
-    if ([string]::IsNullOrWhiteSpace($CmdText)) { return $null }
-    $key = $CmdText.Substring(0, [Math]::Min(300, $CmdText.Length))
-    if ($script:contentDedupCache.ContainsKey($key)) {
-        $elapsed = [int]((Get-Date) - $script:contentDedupCache[$key].timestamp).TotalMilliseconds
-        if ($elapsed -lt $script:contentDedupMaxAgeMs) { return $script:contentDedupCache[$key] }
-        else { $script:contentDedupCache.Remove($key) }
-    }
+    # V21: DISABLED — always return null so every command executes fresh
     return $null
 }
 
-# ── V13: Inflight guard helpers ──
-function Set-Inflight { param([string]$CmdId)
-    $script:inflightCmdId = $CmdId
-    $script:inflightSince = Get-Date
+# ── V21: Concurrent inflight tracking — multiple commands simultaneously ──
+$script:inflight = @{}  # cmd_id → @{worker=$worker; type=$ctype; start=(Get-Date); timeout=$seconds}
+
+function Add-Inflight { param([string]$CmdId, $Worker, [string]$Ctype, [int]$Timeout)
+    $script:inflight[$CmdId] = @{
+        worker = $Worker
+        type = $Ctype
+        start = Get-Date
+        timeout = $Timeout
+    }
+    Log "[$CmdId] INFLIGHT added — $Ctype → $($Worker.id) (${Timeout}s timeout)"
 }
-function Clear-Inflight {
-    $script:inflightCmdId = ""
-    $script:inflightSince = $null
+
+function Remove-Inflight { param([string]$CmdId)
+    $script:inflight.Remove($CmdId)
 }
-function Get-Inflight {  # returns $null if none or expired
-    if ([string]::IsNullOrWhiteSpace($script:inflightCmdId)) { return $null }
-    if ($script:inflightSince) {
-        $elapsed = [int]((Get-Date) - $script:inflightSince).TotalSeconds
-        if ($elapsed -gt $script:inflightTimeout) {
-            Log "[INFLIGHT] Expired: $($script:inflightCmdId) (${elapsed}s > ${$script:inflightTimeout}s) — allowing override"
-            Clear-Inflight
-            return $null
+
+function Get-InflightCount { return $script:inflight.Count }
+
+function Check-InflightResults {
+    <#
+     .SYNOPSIS
+     Poll for completed worker results. Worker writes r_{cid}.json when done.
+     Returns number of commands completed in this call.
+    #>
+    $completed = 0
+    $toRemove = @()
+
+    foreach ($cid in $script:inflight.Keys) {
+        $info = $script:inflight[$cid]
+        $elapsed = [int]((Get-Date) - $info.start).TotalSeconds
+
+        # Check timeout
+        if ($elapsed -gt ($info.timeout + 5)) {
+            Log "[$cid] INFLIGHT TIMEOUT after ${elapsed}s (>$($info.timeout)s)"
+            $toRemove += $cid
+            $completed++
+            continue
+        }
+
+        # Check if worker wrote result file
+        $rFile = Join-Path $script:baseDir "r_${cid}.json"
+        if (Test-Path $rFile) {
+            $content = Read-Json -path $rFile
+            if ($content) {
+                Log "[$cid] INFLIGHT COMPLETE — exit=$($content.exit_code) dur=$($content.duration_ms)ms"
+                $toRemove += $cid
+                $completed++
+            }
         }
     }
-    return $script:inflightCmdId
+
+    # Cleanup
+    foreach ($cid in $toRemove) {
+        $script:inflight.Remove($cid)
+    }
+
+    return $completed
 }
 
 # ── V13: Periodic hostLoopMode cleanup — runs every ~60s ──
 $script:housekeepCounter = 0
+$script:guardianCheckCounter = 0
+$script:guardianTaskName = "BridgeGuardian-V3"
+$script:registerGuardianScript = Join-Path (Split-Path -Parent $baseDir) "cluster\register_guardian_v3.ps1"
 function Clean-HostLoopMode {
     $sessionDirs = @("$env:LOCALAPPDATA\Claude-3p\local-agent-mode-sessions")
     $found = 0; $fixed = 0
@@ -328,6 +375,142 @@ function Clean-HostLoopMode {
         } catch {}
     }
     if ($fixed -gt 0) { Log "[HOUSEKEEP] Fixed hostLoopMode in $fixed session files (scanned $found)" }
+}
+
+# ── V21: Guardian self-maintenance — ensure guardian scheduled task is registered ──
+# Runs every ~300 housekeeping cycles (~5 min). Re-registers if missing.
+function Assert-GuardianTask {
+    $script:guardianCheckCounter++
+    if ($script:guardianCheckCounter % 300 -ne 0) { return }
+
+    try {
+        $taskOutput = schtasks /Query /FO CSV /NH /TN "$script:guardianTaskName" 2>&1
+        if ($LASTEXITCODE -eq 0 -and $taskOutput -match "$script:guardianTaskName") {
+            Log "[GUARDIAN] Task '$script:guardianTaskName' is registered — healthy"
+        } else {
+            throw "Task not found in query output"
+        }
+    } catch {
+        Log "[GUARDIAN] Task '$script:guardianTaskName' NOT registered — attempting re-registration..."
+        if (Test-Path $script:registerGuardianScript) {
+            try {
+                $proc = Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList @(
+                    "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", "`"$script:registerGuardianScript`"",
+                    "-Force"
+                ) -PassThru -Wait
+                Log "[GUARDIAN] Re-registration exit code: $($proc.ExitCode)"
+            } catch {
+                Log "[GUARDIAN] Re-registration failed: $($_.Exception.Message)"
+            }
+        } else {
+            Log "[GUARDIAN] Registration script not found at $script:registerGuardianScript"
+        }
+    }
+}
+
+# ── V19: Typed worker dispatch via Named Pipe ──
+$script:poolFile = Join-Path (Split-Path (Split-Path $MyInvocation.MyCommand.Path) -Parent) "cluster\.worker_pool.json"
+$script:pool = $null
+$script:poolLastLoad = $null
+$script:workerRR = @{}  # round-robin counter per worker type
+
+function Get-WorkerPool {
+    $now = Get-Date
+    if (-not $script:pool -or -not $script:poolLastLoad -or (($now - $script:poolLastLoad).TotalSeconds -gt 30)) {
+        $p = Read-Json -path $script:poolFile
+        if ($p -and $p.workers -and $p.workers.Count -gt 0) {
+            $script:pool = $p
+            $script:poolLastLoad = $now
+        }
+    }
+    return $script:pool
+}
+
+function Get-WorkerForType {
+    param([string]$ctype)
+
+    $pool = Get-WorkerPool
+    if (-not $pool -or -not $pool.workers) { return $null }
+
+    # Map ctype to target worker type
+    $targetType = switch ($ctype) {
+        "wsl"   { "wsl" }
+        "user"  { "user" }
+        "file"  { "file" }
+        "process" { "process" }
+        "system" { "system" }
+        default { "generic" }
+    }
+
+    # Find alive workers of target type
+    $candidates = @($pool.workers | Where-Object {
+        $_.type -eq $targetType -and (Get-Process -Id $_.pid -ErrorAction SilentlyContinue)
+    })
+
+    # Fall back to generic if no specialized worker
+    if ($candidates.Count -eq 0 -and $targetType -ne "generic") {
+        Log "[DISPATCH] No '$targetType' worker — falling back to generic"
+        $candidates = @($pool.workers | Where-Object {
+            $_.type -eq "generic" -and (Get-Process -Id $_.pid -ErrorAction SilentlyContinue)
+        })
+    }
+
+    if ($candidates.Count -eq 0) { return $null }
+
+    # V21: Skip workers that are currently busy (have inflight commands)
+    $busyWorkerIds = @($script:inflight.Values | ForEach-Object { $_.worker.id })
+    $available = @($candidates | Where-Object { $_.id -notin $busyWorkerIds })
+    if ($available.Count -gt 0) { $candidates = $available }
+    # If all workers are busy, fall through to round-robin (pipe connect will fail,
+    # dispatch falls back to in-process execution)
+
+    # Round-robin within type
+    $idx = [Math]::Max(0, $script:workerRR[$targetType])
+    $script:workerRR[$targetType] = ($idx + 1) % $candidates.Count
+    return $candidates[$idx % $candidates.Count]
+}
+
+function Dispatch-ToWorker {
+    <#
+     .SYNOPSIS
+     V21: ASYNC dispatch — send command via Named Pipe, wait for ACK (100ms),
+     then return immediately. Worker writes r_{cid}.json when done.
+     Returns worker object (truthy = success, null = failed).
+    #>
+    param([string]$cid, [string]$ctype, [string]$cmd, [int]$timeout)
+
+    $worker = Get-WorkerForType -ctype $ctype
+    if (-not $worker) {
+        Log "[$cid] No worker available for type '$ctype'"
+        return $null
+    }
+
+    try {
+        $pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", $worker.pipe, [System.IO.Pipes.PipeDirection]::InOut)
+        $pipe.Connect(2000)
+        $reader = New-Object System.IO.StreamReader($pipe, $script:utf8)
+        $writer = New-Object System.IO.StreamWriter($pipe, $script:utf8)
+        $writer.AutoFlush = $true
+
+        $cmdJson = @{cmd_id=$cid; command=$cmd; type=$ctype; timeout=$timeout} | ConvertTo-Json -Compress
+        $writer.WriteLine($cmdJson)
+
+        # Wait for immediate ACK (100ms) — confirms worker received command
+        $ackTask = $reader.ReadLineAsync()
+        $gotAck = $ackTask.Wait(100)
+
+        $pipe.Close()
+        if ($gotAck) {
+            Log "[$cid] DISPATCH to $($worker.id) — ACK received"
+        } else {
+            Log "[$cid] DISPATCH to $($worker.id) — sent (no ACK, assumed delivered)"
+        }
+        return $worker  # non-null = dispatch succeeded
+    } catch {
+        Log "[$cid] DISPATCH to $($worker.id) failed: $($_.Exception.Message)"
+        return $null
+    }
 }
 
 # ── startup ─────────────────────────────────────────────────────────────
@@ -367,20 +550,21 @@ while ($true) {
 
     # ── V13: Housekeeping (~every 300 loops = ~60s) ──
     $script:housekeepCounter++
-    if ($script:housekeepCounter % 300 -eq 0) { Clean-HostLoopMode }
-
-    # ── V13: Inflight guard — if a cmd is still running, reject new pending ──
-    $inflight = Get-Inflight
-    if ($inflight -and $queue -and $queue.cmd_id -ne $inflight) {
-        # Another command is inflight, but the writer might be polling blindly.
-        # Instead of queueing, we SKIP processing — the writer must wait.
-        if ($queue.state -eq "pending") {
-            Log "[INFLIGHT] Rejecting $($queue.cmd_id) — cmd $inflight still running (state=$($queue.state))"
-            # Mark queue as "blocked" so the writer knows we're busy
-            Write-Text -path $script:queueFile -content "{`"state`":`"blocked`",`"cmd_id`":`"$inflight`",`"command`":`"`",`"type`":`"`"}"
-        }
-        continue
+    if ($script:housekeepCounter % 300 -eq 0) {
+        Clean-HostLoopMode
+        Assert-GuardianTask
     }
+
+    # ---- V21: Poll for completed inflight results ----
+    $completedCount = Check-InflightResults
+    if ($completedCount -gt 0 -and (Get-InflightCount -eq 0)) {
+        $idleCheck = Read-Json -path $script:queueFile
+        if ($idleCheck -and ($idleCheck.state -eq "running" -or $idleCheck.state -eq "blocked")) {
+            Write-Text -path $script:queueFile -content $idleQueue
+            Log "[INFLIGHT] All commands completed --- queue reset to idle"
+        }
+    }
+    # ---- V21: Accept new pending commands (concurrent - no inflight guard) ----
 
     if ($queue -and $queue.state -eq "pending" -and $queue.cmd_id -ne "" -and $queue.cmd_id -ne $script:lastCmdId) {
         $script:lastCmdId = $queue.cmd_id
@@ -413,7 +597,7 @@ while ($true) {
         }
 
         # ── V13: Mark inflight before execution ──
-        Set-Inflight $cid
+        # V21: inflight tracked after dispatch (not before)
 
         # ── V5: Apply learned rules to transform command ──
         $ruleResult = if (Get-Command "Init-RuleEngine" -ErrorAction SilentlyContinue) {
@@ -437,18 +621,34 @@ while ($true) {
 
         # ── Meta-command handler (self-management) ──
         if ($cmd -eq "__BRIDGE_RESTART__") {
-            Log "[$cid] BRIDGE RESTART requested - exiting, watchdog will restart"
-            Clear-Inflight
+            Log "[$cid] BRIDGE RESTART requested — launching restarter, then exiting"
+
+            # Launch restarter to survive this exit
+            $restarterScript = Join-Path (Split-Path -Parent $script:watcherScriptPath) "restarter.ps1"
+            if (Test-Path $restarterScript) {
+                try {
+                    $restarterProc = Start-Process -WindowStyle Hidden -FilePath "powershell.exe" -ArgumentList @(
+                        "-NoProfile", "-ExecutionPolicy", "Bypass",
+                        "-File", "`"$restarterScript`"",
+                        "-OldPID", [string]$PID,
+                        "-WatcherPath", "`"$script:watcherScriptPath`"",
+                        "-LogFile", "`"$script:logFile`""
+                    ) -PassThru
+                    Log "[$cid] Restarter launched PID=$($restarterProc.Id)"
+                } catch {
+                    Log "[$cid] Failed to launch restarter: $($_.Exception.Message) — guardian fallback"
+                }
+            }
+
             Write-Text -path $script:queueFile -content "{`"state`":`"idle`",`"cmd_id`":`"`",`"command`":`"`",`"type`":`"`"}"
             $restartRes = @{state="done";cmd_id=$cid;exit_code=0;stdout="Bridge restarting...";stderr="";duration_ms=0;timestamp=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
             Write-Text -path (Join-Path $baseDir "r_${cid}.json") -content ($restartRes | ConvertTo-Json -Compress)
-            # Signal result ready
-            # resultEvent removed in v15 (FileSystemWatcher provides equivalent wake-up)
+            try { Remove-Item $lockFile -Force -ErrorAction SilentlyContinue } catch {}
             exit 0
         }
         if ($cmd -eq "__BRIDGE_STOP__") {
             Log "[$cid] BRIDGE STOP requested - exiting permanently"
-            Clear-Inflight
+            $script:inflight = @{}
             Write-Text -path $script:queueFile -content "{`"state`":`"idle`",`"cmd_id`":`"`",`"command`":`"`",`"type`":`"`"}"
             $stopRes = @{state="done";cmd_id=$cid;exit_code=0;stdout="Bridge stopped";stderr="";duration_ms=0;timestamp=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
             Write-Text -path (Join-Path $baseDir "r_${cid}.json") -content ($stopRes | ConvertTo-Json -Compress)
@@ -487,7 +687,7 @@ while ($true) {
             Write-Text -path (Join-Path $baseDir "r_${cid}.json") -content ($inlineRes | ConvertTo-Json -Compress)
             # Signal result ready
             # resultEvent removed in v15 (FileSystemWatcher provides equivalent wake-up)
-            Clear-Inflight
+            $script:inflight.Remove($cid)   # V21
             Add-ContentDedup -CmdText $rawCmd -CmdId $cid
             Log "[$cid] INLINE result written"
             continue
@@ -518,7 +718,7 @@ while ($true) {
             $userRes = @{state = if ($userError) { "error" } else { "done" }; cmd_id=$cid; exit_code=$userExit; stdout=$userOut; stderr=$userErr; error=$userError; duration_ms=[int]((Get-Date)-$t0).TotalMilliseconds; timestamp=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
             Write-Text -path $script:queueFile -content $idleQueue
             Write-Text -path (Join-Path $baseDir "r_${cid}.json") -content ($userRes | ConvertTo-Json -Compress)
-            Clear-Inflight
+            $script:inflight.Remove($cid)   # V21
             Add-ContentDedup -CmdText $rawCmd -CmdId $cid
             # resultEvent removed in v15 (FileSystemWatcher provides equivalent wake-up)
             Log "[$cid] USER result written (exit=$userExit)"
@@ -532,123 +732,188 @@ while ($true) {
         $progressFile = Join-Path $baseDir "r_${cid}_progress.json"
 
         # ══════════════════════════════════════════════════════════════════
-        # V17.2: Runspace-wrapped ScriptBlock with REAL timeout support
-        # - Strips 'exit' (kills host process in ScriptBlock mode)
-        # - Uses [powershell]::Create() + BeginInvoke for async timeout
-        # - Timeout: stops runaway scripts, falls back to subprocess
-        # - Fast path (< timeout): returns result inline, ~3-8ms overhead
+        # V19: Named Pipe dispatch to typed workers
+        # - Dispatch to worker via Named Pipe for ALL types (powershell/cmd/wsl/...)
+        # - Fallback: if no worker available, execute in-process (ScriptBlock + subprocess)
         # ══════════════════════════════════════════════════════════════════
-        $sbFastOk = $false
-        if ($ctype -eq "powershell" -or $ctype -eq "powershell_text" -or $ctype -eq "inline") {
-            try {
-                # Strip 'exit N' / 'exit' — would terminate the watcher process
-                $sbCmd = $cmd -replace '\bexit\s+\d+\s*;?\s*$', '' -replace '\bexit\s*;?\s*$', ''
-
-                # ── Runspace-wrapped execution with timeout ──
-                $ps = [System.Management.Automation.PowerShell]::Create()
-                $ps.AddScript({
-                    param($Cmd)
-                    $ErrorActionPreference = 'Continue'
-                    & ([ScriptBlock]::Create($Cmd)) 2>&1
-                }).AddArgument($sbCmd)
-
-                $handle = $ps.BeginInvoke()
-                $sbTimeoutMs = [Math]::Max(1000, ($timeout * 1000))
-                if ($handle.AsyncWaitHandle.WaitOne($sbTimeoutMs)) {
-                    $sbResult = $ps.EndInvoke($handle)
-                    $stdout = if ($sbResult -ne $null) { ($sbResult | Out-String).Trim() } else { "" }
-                    $exitCode = 0
-                    $stderr = ""
-                    $errorMsg = ""
-                    $sbFastOk = $true
-                    Log "[$cid] V17.2 RUNSPACE fast-path OK — $(((Get-Date) - $t0).TotalMilliseconds.ToString('0'))ms"
-                } else {
-                    $ps.Stop()
-                    Log "[$cid] V17.2 RUNSPACE TIMEOUT after ${timeout}s — falling back to subprocess"
-                }
-                $ps.Dispose()
-
-            } catch {
-                $sbFailMsg = $_.Exception.Message
-                Log "[$cid] V17.2 Runspace failed ($sbFailMsg) — falling back to subprocess"
+        # V21: ASYNC Named Pipe dispatch — send and forget, worker writes r_{cid}.json
+        $pipeDispatched = $false
+        if ($ctype -ne "user") {  # user type uses its own queue-based routing
+            $worker = Dispatch-ToWorker -cid $cid -ctype $ctype -cmd $cmd -timeout $origTimeout
+            if ($worker) {
+                # Dispatch succeeded — track inflight, worker handles result asynchronously
+                Add-Inflight -CmdId $cid -Worker $worker -Ctype $ctype -Timeout $origTimeout
+                $pipeDispatched = $true
+                Log "[$cid] V21 ASYNC-DISPATCH to $($worker.id) — inflight, waiting for result"
+                # V21: Reset queue immediately — new commands can be accepted while this runs
+                Write-Text -path $script:queueFile -content $idleQueue
             }
         }
 
-        if (-not $sbFastOk) {
-            try {
-                $psi = New-Object System.Diagnostics.ProcessStartInfo
-                if ($ctype -eq "cmd") {
-                    $psi.FileName = "cmd.exe"; $psi.Arguments = "/c $cmd"
-                } elseif ($ctype -eq "powershell") {
-                    $psi.FileName = "powershell.exe"
-                    $enc = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($cmd))
-                    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $enc"
-                } elseif ($ctype -eq "powershell_text") {
-                    $psi.FileName = "powershell.exe"
-                    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"$($cmd -replace '\"', '\"')`""
-                } else {
-                    throw "Unknown type: $ctype"
+        if (-not $pipeDispatched) {
+            # ══════════════════════════════════════════════════════════════════
+            # V17.2: In-process fallback (ScriptBlock fast path + subprocess)
+            # ════════════════════════════�
+            # ══════════════════════════════════════════════════════════════════
+
+            # ── ScriptBlock fast path (for powershell/powershell_text/inline) ──
+            $fastPath = $false
+            $subT0 = Get-Date
+            if ($ctype -eq "powershell" -or $ctype -eq "powershell_text" -or $ctype -eq "inline") {
+                try {
+                    $sbCmd = $rawCmd -replace '\bexit\s+\d+\s*;?\s*$', '' -replace '\bexit\s*;?\s*$', ''
+                    $ps = [PowerShell]::Create()
+                    $ps.AddScript({ param($c) & ([ScriptBlock]::Create($c)) 2>&1 }).AddArgument($sbCmd)
+                    $h = $ps.BeginInvoke()
+                    $tMs = [Math]::Max(1000, ($origTimeout * 1000))
+                    if ($h.AsyncWaitHandle.WaitOne($tMs)) {
+                        $r = $ps.EndInvoke($h)
+                        $stdout = if ($r) { ($r | Out-String).Trim() } else { "" }
+                        $exitCode = 0; $fastPath = $true
+                        $elapsed = [int]((Get-Date) - $subT0).TotalMilliseconds
+                        Log "  [$cid] V17.2 RUNSPACE fast-path OK — ${elapsed}ms"
+                    } else {
+                        $ps.Stop()
+                        $errorMsg = "TIMEOUT after ${origTimeout}s"
+                        $stdout = "[TIMEOUT]"
+                        Log "  [$cid] V17.2 RUNSPACE TIMEOUT after ${origTimeout}s — subprocess fallback"
+                    }
+                    $ps.Dispose()
+                } catch {
+                    Log "  [$cid] V17.2 RUNSPACE exception: $($_.Exception.Message) — subprocess fallback"
                 }
-                $psi.RedirectStandardOutput = $true
-                $psi.RedirectStandardError  = $true
-                $psi.UseShellExecute = $false
-                $psi.CreateNoWindow = $true
-                $psi.StandardOutputEncoding = $script:utf8
-                $psi.StandardErrorEncoding  = $script:utf8
+            }
 
-                $p = [System.Diagnostics.Process]::Start($psi)
-                if (-not $p) { throw "Process.Start returned null" }
-
-                # V4: ReadToEndAsync — background read eliminates pipe-buffer race.
-                $outTask = $p.StandardOutput.ReadToEndAsync()
-                $errTask = $p.StandardError.ReadToEndAsync()
-
-                $loopStart = Get-Date
-                $lastProgressWrite = Get-Date
-                while ($true) {
-                    # heartbeat inside the command too
-                    try {
-                        [System.IO.File]::WriteAllText($script:heartbeatFile, (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"), $script:utf8)
-                    } catch {}
-
-                    if ($p.WaitForExit($flushInterval * 1000)) {
-                        $exitCode = $p.ExitCode
-                        $stdout = $outTask.Result
-                        $stderr = $errTask.Result
-                        Log "[$cid] Process exited naturally, PID=$($p.Id) code=$exitCode"
-                        break
+            # ── Subprocess fallback (all types, or when ScriptBlock fails) ──
+            if (-not $fastPath) {
+                try {
+                    $psi = New-Object System.Diagnostics.ProcessStartInfo
+                    if ($ctype -eq "cmd") {
+                        $psi.FileName = "cmd.exe"; $psi.Arguments = "/c $rawCmd"
+                    } elseif ($ctype -eq "wsl") {
+                        $psi.FileName = "wsl.exe"
+                        $psi.Arguments = "-e bash -c `"$($rawCmd -replace '"', '\"')`""
+                    } else {
+                        $psi.FileName = "powershell.exe"
+                        $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"$($rawCmd -replace '"', '\"')`""
                     }
+                    $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+                    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+                    $psi.StandardOutputEncoding = $script:utf8; $psi.StandardErrorEncoding = $script:utf8
 
-                    # V16: Progress flush
-                    $now = Get-Date
-                    if (($now - $lastProgressWrite).TotalSeconds -ge $flushInterval) {
-                        $elapsedSec = [int]($now - $t0).TotalSeconds
-                        $progressData = @{
-                            elapsed_s = $elapsedSec
-                            running = $true
-                            pid = $p.Id
-                            has_exited = $false
-                            note = "ReadToEndAsync mode: partial stdout not available; full capture guaranteed on completion"
+                    $p = [System.Diagnostics.Process]::Start($psi)
+                    if (-not $p) { throw "Process.Start returned null" }
+                    Log "  [$cid] Subprocess started PID=$($p.Id), timeout=${origTimeout}s"
+
+                    $outTask = $p.StandardOutput.ReadToEndAsync()
+                    $errTask = $p.StandardError.ReadToEndAsync()
+
+                    # V16: Progress flush + timeout monitoring (V2.2: progress file)
+                    $loopStart = Get-Date
+                    $lastProgressWrite = Get-Date
+                    $timedOut = $false
+
+                    while ($true) {
+                        # Heartbeat inside subprocess too (prevents stale detection)
+                        try { [System.IO.File]::WriteAllText($script:heartbeatFile, (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"), $script:utf8) } catch {}
+
+                        if ($p.WaitForExit($flushInterval * 1000)) {
+                            $exitCode = $p.ExitCode
+                            $stdout = $outTask.Result
+                            $stderr = $errTask.Result
+                            Log "  [$cid] Process exited naturally, PID=$($p.Id) code=$exitCode"
+                            break
                         }
-                        Write-Text -path $progressFile -content ($progressData | ConvertTo-Json -Compress)
-                        $lastProgressWrite = $now
-                        Log "[$cid] Progress: ${elapsedSec}s elapsed, PID=$($p.Id) still running"
+
+                        # V2.2: Progress file every 5s
+                        $now = Get-Date
+                        if (($now - $lastProgressWrite).TotalSeconds -ge $flushInterval) {
+                            $elapsedSec = [int]($now - $loopStart).TotalSeconds
+                            $progressData = @{
+                                state = "running"
+                                cmd_id = $cid
+                                elapsed_seconds = $elapsedSec
+                                timestamp = $now.ToString("yyyy-MM-dd HH:mm:ss.fff")
+                            }
+                            Write-Text -path $progressFile -content ($progressData | ConvertTo-Json -Compress)
+                            $lastProgressWrite = $now
+                            Log "  [$cid] Progress: ${elapsedSec}s elapsed, PID=$($p.Id) still running"
+                        }
+
+                        # Check timeout
+                        if (($now - $loopStart).TotalSeconds -gt ($origTimeout + 5)) {
+                            $timedOut = $true
+                            Log "  [$cid] TIMEOUT after ${origTimeout}s — killing PID $($p.Id)"
+                            try {
+                                $p.Kill()
+                                if (-not $p.WaitForExit(3000)) {
+                                    Log "  [$cid] Kill didn't finish in 3s, continuing..."
+                                }
+                            } catch { Log "  [$cid] Kill exception: $_" }
+                            Start-Sleep -Milliseconds 300
+                            try { $stdout = $outTask.Result } catch { $stdout = "" }
+                            try { $stderr = $errTask.Result } catch { $stderr = "" }
+                            break
+                        }
                     }
 
-                    # Check timeout
-                    $elapsedSec = [int]((Get-Date) - $t0).TotalSeconds
-                    if ($elapsedSec -ge $origTimeout) {
-                        $timedOut = $true
-                        Log "[$cid] TIMEOUT after ${origTimeout}s - killing PID $($p.Id)"
-                        try {
-                            $p.Kill()
-                            if (-not $p.WaitForExit(3000)) {
-                                Log "[$cid] Kill didn't finish in 3s, continuing..."
-                            }
-                        } catch { Log "[$cid] Kill exception: $_" }
+                    if ($timedOut) {
+                        $exitCode = -1; $errorMsg = "TIMEOUT after ${origTimeout}s"
+                    }
+                    try { Remove-Item $progressFile -Force -ErrorAction SilentlyContinue } catch {}
+                    $p.Dispose()
+                } catch {
+                    $errorMsg = $_.Exception.Message
+                    Log "  [$cid] Subprocess exception: $errorMsg"
+                }
+            }
 
-                        Start-Sleep -Milliseconds 300
-                        try { $stdout = $outTask.Result } catch { $stdout = "" }
-                        try { $stderr = $errTask.Result } catch { $stderr = "" }
+            # ── Build result and write ──
+            $elapsed = [int]((Get-Date) - $subT0).TotalMilliseconds
+            $res = @{
+                state = $(if($errorMsg){"error"}else{"done"})
+                cmd_id = $cid
+                exit_code = $exitCode
+                stdout = $stdout
+                stderr = $stderr
+                error = $errorMsg
+                duration_ms = $elapsed
+                fast_path = $fastPath
+                timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+            }
+            Write-Text -path (Join-Path $baseDir "r_${cid}.json") -content ($res | ConvertTo-Json -Compress)
+            Write-Text -path $script:queueFile -content $idleQueue
+            Add-ContentDedup -CmdText $rawCmd -CmdId $cid
+            Log "  [$cid] result written (exit=$exitCode, dur=${elapsed}ms, fast=$fastPath)"
 
-             
+            # ── V21: Self-upgrade check (every ~50 iterations) ──
+            $script:selfUpgradeCounter++
+            if ($script:selfUpgradeCounter -ge $script:selfUpgradeCheckInterval) {
+                $script:selfUpgradeCounter = 0
+                try {
+                    $currentWrite = (Get-Item $script:watcherScriptPath).LastWriteTime
+                    if ($currentWrite -gt $script:watcherScriptLastWrite) {
+                        Log "[SELF-UPGRADE] watcher.ps1 changed on disk — initiating graceful restart"
+                        Write-Text -path $script:restartFlagFile -content ((Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"))
+                        $restartCmd = @{
+                            state = "pending"
+                            cmd_id = "__SELF_UPGRADE_$(Get-Date -Format 'yyyyMMddHHmmss')__"
+                            type = "__BRIDGE_RESTART__"
+                            command = ""
+                            timeout = 10
+                        }
+                        Write-Text -path $script:queueFile -content ($restartCmd | ConvertTo-Json -Compress)
+                    }
+                } catch {
+                    Log "[SELF-UPGRADE] Check failed: $_"
+                }
+            }
+        }  # end if (-not $pipeDispatched)
+    }  # end if ($queue) - pending command scope
+    }  # end try (main loop body)
+    catch {
+        $ex = $_.Exception.ToString()
+        Log "[FATAL] Main loop exception: $ex"
+        Start-Sleep -Seconds 1
+    }  # end catch
+}  # end while ($true)

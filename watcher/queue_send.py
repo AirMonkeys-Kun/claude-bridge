@@ -50,4 +50,6 @@ if __name__ == "__main__":
     print(f"Queued: {args.id} (type={args.type})")
     
     if args.wait:
-        result_dir = os.path.dirname(queue_path
+        result_dir = os.path.dirname(queue_path)
+        result = wait_result(result_dir, args.id, args.timeout + 5)
+        print(json.dumps(result, indent=2))

@@ -14,7 +14,7 @@
                               },
                       "example_before":  "echo hello \u0026\u0026 whoami",
                       "example_after":  "echo hello ^\u0026^\u0026 whoami",
-                      "hits":  14,
+                      "hits":  16,
                       "created":  "2026-05-31"
                   },
                   {
@@ -216,10 +216,27 @@
                                   "find":  "|",
                                   "replace_with":  "^|"
                               },
-                      "hits":  0,
+                      "hits":  10,
                       "created":  "2026-06-04",
                       "example_before":  "echo hello | findstr hello",
                       "example_after":  "echo hello ^| findstr hello"
+                  },
+                  {
+                      "id":  "scheduled-task-to-schtasks",
+                      "description":  "Get-ScheduledTask 在 PowerShell 下较慢（~450ms/次），自动替换为 schtasks 命令（~20ms/次），22倍性能提升",
+                      "triggers":  {
+                                       "type":  "powershell",
+                                       "pattern_in_command":  "Get-ScheduledTask"
+                                   },
+                      "fix":  {
+                                  "action":  "escape",
+                                  "find":  "Get-ScheduledTask -TaskName \u0027",
+                                  "replace_with":  "schtasks /Query /FO CSV /NH /TN \u0027"
+                              },
+                      "hits":  0,
+                      "created":  "2026-06-04",
+                      "example_before":  "type=powershell, command=Get-ScheduledTask -TaskName \u0027BridgeGuardian-V2\u0027 | Format-List",
+                      "example_after":  "type=powershell, command=schtasks /Query /FO CSV /NH /TN \u0027BridgeGuardian-V2\u0027 | Format-List"
                   },
                   {
                       "id":  "rule-template",
@@ -263,6 +280,6 @@
                       "hits":  0
                   }
               ],
-    "version":  "3.0",
-    "last_updated":  "2026-06-04 00:30:00"
-}    
+    "version":  "2.0",
+    "last_updated":  "2026-06-04 15:30:18.860"
+}

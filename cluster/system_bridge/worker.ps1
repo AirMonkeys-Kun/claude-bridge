@@ -121,8 +121,12 @@ while ($true) {
         $reader=New-Object System.IO.StreamReader($pipe); $writer=New-Object System.IO.StreamWriter($pipe); $writer.AutoFlush=$true
         $cmdJson=$reader.ReadLine()
         if (-not [string]::IsNullOrWhiteSpace($cmdJson)) {
-            $q=$cmdJson|ConvertFrom-Json; $cid=$q.id; $raw=$q.c; $ctype=$q.t; $timeout=30
-            if ([string]::IsNullOrWhiteSpace($ctype)) { $ctype="powershell" }; if ($q.to -gt 0) { $timeout=$q.to }
+            $q=$cmdJson|ConvertFrom-Json
+            # Support both standard format (cmd_id/command/type/timeout) and legacy short format (id/c/t/to)
+            $cid=if($q.cmd_id){$q.cmd_id}else{$q.id}
+            $raw=if($q.command){$q.command}else{$q.c}
+            $ctype=if($q.type){$q.type}else{$q.t}
+            $timeout=if($q.timeout -gt 0){$q.timeout}elseif($q.to -gt 0){$q.to}else{30}
             TLog "[PIPE] [$cid] type=$ctype to=${timeout}s"
             $res=ExecCmd $cid $raw $ctype $timeout
             $jsonStr = $res | ConvertTo-Json -Depth 1 -Compress

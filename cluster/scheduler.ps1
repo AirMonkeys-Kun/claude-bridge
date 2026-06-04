@@ -436,4 +436,7 @@ while ($true) {
 
     # ── Prune ──
     if ($processedIds.Count -gt 200) {
-        
+        $oldest = $processedIds.Keys | Sort-Object { $processedIds[$_] } | Select-Object -First ($processedIds.Count - 200)
+        foreach ($k in $oldest) { $processedIds.Remove($k) }
+    }
+}

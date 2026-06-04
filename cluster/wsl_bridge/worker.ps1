@@ -161,7 +161,7 @@ while ($true) {
         $pipe.WaitForConnection()
         $reader=New-Object System.IO.StreamReader($pipe); $writer=New-Object System.IO.StreamWriter($pipe); $writer.AutoFlush=$true
         $cmdJson=$reader.ReadLine()
-        if (-not [string]::IsNullOrWhiteSpace($cmdJson)) { $q=$cmdJson|ConvertFrom-Json; $cid=$q.id; $raw=$q.c; $ctype=$q.t; $timeout=30; if ([string]::IsNullOrWhiteSpace($ctype)) { $ctype="powershell" }; if ($q.to -gt 0) { $timeout=$q.to }; TLog "[PIPE] [$cid] type=$ctype to=${timeout}s"; $res=ExecCmd $cid $raw $ctype $timeout; $jsonStr=$res|ConvertTo-Json -Depth 1 -Compress; $writer.WriteLine($jsonStr); WriteResult $res }
+        if (-not [string]::IsNullOrWhiteSpace($cmdJson)) { $q=$cmdJson|ConvertFrom-Json; $cid=if($q.cmd_id){$q.cmd_id}else{$q.id}; $raw=if($q.command){$q.command}else{$q.c}; $ctype=if($q.type){$q.type}else{$q.t}; $timeout=if($q.timeout -gt 0){$q.timeout}elseif($q.to -gt 0){$q.to}else{30}; if ([string]::IsNullOrWhiteSpace($ctype)) { $ctype="powershell" }; TLog "[PIPE] [$cid] type=$ctype to=${timeout}s"; $res=ExecCmd $cid $raw $ctype $timeout; $jsonStr=$res|ConvertTo-Json -Depth 1 -Compress; $writer.WriteLine($jsonStr); WriteResult $res }
         $pipe.Disconnect()
     } catch {} finally { if ($pipe) { try { $pipe.Close() } catch {} } }
     Start-Sleep -Milliseconds 5

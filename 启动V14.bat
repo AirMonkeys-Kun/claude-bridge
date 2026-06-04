@@ -15,4 +15,5 @@ if exist "%~dp0watcher\.watcher_heartbeat" (
     echo [FAIL] No heartbeat found.
 )
 echo.
-echo Y
+echo You can close this window now.
+pause

@@ -60,4 +60,4 @@ $elapsed = [int]((Get-Date) - $startTime).TotalSeconds
 Write-Host ""
 Write-Host "  V14 Watcher UP, worker launch command queued"
 Write-Host "  Total: ${elapsed}s"
-Writ
+Write-Host "=== Done ==="

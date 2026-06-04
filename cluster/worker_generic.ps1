@@ -1,23 +1,30 @@
 #Requires -Version 5.0
 <#
- worker_generic.ps1 — Generic parallel worker (V3 — PIPE-DIRECT)
- ─────────────────
+ worker_generic.ps1 — Typed worker (V4 — TYPE-AWARE)
+ ────────────────
+ V4 (2026-06-04): Type-aware workers created by factory.
+   WorkerId = {type}_{n} (e.g. file_1, generic_3)
+   Pipe name = Cluster_Wkr_{type}_{n}
+   Directory = cluster/{type}_{n}/
+   -Type parameter is metadata for routing by the dispatcher.
+
  V3 (2026-06-04): Pipe server executes commands DIRECTLY and returns results
    through the pipe — no queue file I/O in fast path. Result also written to
-   r_{cid}.json for backward compatibility. FSW + queue file is fallback only.
+   r_{cid}.json for backward compatibility.
 
  V2 (2026-06-03): FileSystemWatcher replaces 200ms polling for zero-latency
-   queue detection. ~22ms saved per command.
+   queue detection.
 
  V1 (2026-06-03): Initial — pool-friendly worker with own Named Pipe server,
    queue file, ScriptBlock fast path + subprocess fallback.
 
- Usage: powershell -File worker_generic.ps1 -WorkerId g1 [-BridgeBase D:\...]
-        WorkerId becomes pipe name: Cluster_Wkr_generic_g1
+ Usage: powershell -File worker_generic.ps1 -WorkerId file_1 -Type file -BridgeBase D:\...
+        Pipe = Cluster_Wkr_{type}_{n} (from WorkerId)
 #>
 
 param(
-    [string]$WorkerId = $(throw "WorkerId required (e.g. g1, g2, g3)"),
+    [string]$WorkerId = $(throw "WorkerId required (e.g. file_1, generic_3)"),
+    [string]$Type = "generic",
     [string]$BridgeBase = ""
 )
 
@@ -26,9 +33,9 @@ if (-not $BridgeBase) {
 }
 
 $workerName = "wkr_${WorkerId}"
-$script:pipeName = "Cluster_Wkr_generic_${WorkerId}"
+$script:pipeName = "Cluster_Wkr_${WorkerId}"
 
-$script:baseDir = Join-Path $BridgeBase "cluster\worker_generic_${WorkerId}"
+$script:baseDir = Join-Path $BridgeBase "cluster\${WorkerId}"
 $script:queueFile = Join-Path $script:baseDir "queue.txt"
 $script:logFile = Join-Path $script:baseDir "watcher.log"
 $script:heartbeatFile = Join-Path $script:baseDir ".heartbeat"
@@ -161,16 +168,48 @@ $null = $pipePs.AddScript({
                     $outTask = $p.StandardOutput.ReadToEndAsync()
                     $errTask = $p.StandardError.ReadToEndAsync()
 
-                    if ($p.WaitForExit(($timeout+2)*1000)) {
-                        $exitCode = $p.ExitCode
-                        $stdout = $outTask.Result
-                        $stderr = $errTask.Result
-                    } else {
+                    # V2.2: Progress loop — write r_{cid}_progress.json every 5s
+                    $subT0 = Get-Date
+                    $progressFile = Join-Path $resultD "r_${cid}_progress.json"
+                    $lastProgressWrite = Get-Date
+                    $timedOut = $false
+
+                    while ($true) {
+                        if ($p.WaitForExit(5000)) {
+                            $exitCode = $p.ExitCode
+                            $stdout = $outTask.Result
+                            $stderr = $errTask.Result
+                            break
+                        }
+
+                        # Write progress every 5s
+                        $now = Get-Date
+                        if (($now - $lastProgressWrite).TotalSeconds -ge 5) {
+                            $elapsed = [int]($now - $subT0).TotalSeconds
+                            $progress = @{
+                                state = "running"
+                                cmd_id = $cid
+                                elapsed_seconds = $elapsed
+                                timestamp = $now.ToString("yyyy-MM-dd HH:mm:ss.fff")
+                            }
+                            try { WF $progressFile ($progress | ConvertTo-Json -Compress) } catch {}
+                            $lastProgressWrite = $now
+                        }
+
+                        # Check timeout
+                        if (($now - $subT0).TotalSeconds -gt ($timeout + 5)) {
+                            $timedOut = $true
+                            break
+                        }
+                    }
+
+                    if ($timedOut) {
                         $p.Kill(); Start-Sleep -Milliseconds 300
                         try { $stdout = $outTask.Result } catch { $stdout = "[TIMEOUT]" }
                         try { $stderr = $errTask.Result } catch {}
                         $exitCode = -1; $errorMsg = "TIMEOUT after ${timeout}s"
                     }
+                    try { Remove-Item $progressFile -Force -ErrorAction SilentlyContinue } catch {}
                     $p.Dispose()
                 } catch {
                     $errorMsg = $_.Exception.Message

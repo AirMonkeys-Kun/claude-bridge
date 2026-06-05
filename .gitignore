@@ -5,7 +5,6 @@ r_*.txt
 # ── Logs ──
 *.log
 watcher/*.log
-
 # ── Cluster runtime artifacts ──
 cluster/.heartbeat
 cluster/*/.heartbeat
@@ -18,22 +17,18 @@ cluster/*/.user_bridge_started
 cluster/*/worker_stderr.log
 cluster/global_state.json
 cluster/state_history.json
-
 # ── Legacy watcher runtime ──
 watcher/.watcher.lock
 watcher/.watcher_heartbeat
-
 # ── SQLite temp DBs ──
 watcher/_DIPS.sqlite
 watcher/_WebStorage.sqlite
 *_DIPS.sqlite
 *_WebStorage.sqlite
-
 # ── Python bytecode ──
 __pycache__/
 *.pyc
 *.pyo
-
 # ── Editor / IDE ──
 .vscode/
 .idea/
@@ -42,11 +37,23 @@ __pycache__/
 *~
 .DS_Store
 Thumbs.db
-
 # ── Temp / scratch txt files ──
 watcher/*.txt
 !watcher/queue.txt
-
 # ── OS junk ──
 ehthumbs.db
 Desktop.ini
+# --- Proxy (moved to claude-desktop-config) ---
+proxy*
+config.yaml
+config_v*.yaml*
+.env
+*.archived
+# --- Legacy stub dirs (moved to docs/legacy/) ---
+backend-integration/
+frontend-integration/
+profile-system/
+startup-scripts/
+# --- Lock files ---
+*.lock
+.lock

@@ -14,7 +14,7 @@
                               },
                       "example_before":  "echo hello \u0026\u0026 whoami",
                       "example_after":  "echo hello ^\u0026^\u0026 whoami",
-                      "hits":  16,
+                      "hits":  22,
                       "created":  "2026-05-31"
                   },
                   {
@@ -182,7 +182,7 @@
                                   "to_type":  "powershell",
                                   "description":  "含 python 的命令改用 powershell 类型执行，避免 GBK 编码问题"
                               },
-                      "hits":  0,
+                      "hits":  2,
                       "created":  "2026-06-04",
                       "example_before":  "type=cmd, command=python script.py",
                       "example_after":  "type=powershell, command=python script.py"
@@ -216,7 +216,7 @@
                                   "find":  "|",
                                   "replace_with":  "^|"
                               },
-                      "hits":  10,
+                      "hits":  15,
                       "created":  "2026-06-04",
                       "example_before":  "echo hello | findstr hello",
                       "example_after":  "echo hello ^| findstr hello"
@@ -281,5 +281,5 @@
                   }
               ],
     "version":  "2.0",
-    "last_updated":  "2026-06-04 15:30:18.860"
+    "last_updated":  "2026-06-05 10:16:17.513"
 }

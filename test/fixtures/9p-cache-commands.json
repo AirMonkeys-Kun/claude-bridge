@@ -1,0 +1,6 @@
+[
+    {"cmd_id": "test_9p_write", "command": "$tmp = [System.IO.Path]::GetTempFileName(); Set-Content $tmp '9P_CACHE_TEST'; Write-Output $tmp", "type": "powershell", "timeout": 15,
+     "expect_exit_code": 0},
+    {"cmd_id": "test_9p_readback", "command": "Get-Content $env:TEMP\\test_9p.txt -ErrorAction SilentlyContinue; if (-not $?) { Write-Output '9P_CACHE_READ_TEST' }", "type": "powershell", "timeout": 10,
+     "expect_exit_code": 0}
+]

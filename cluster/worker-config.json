@@ -1,0 +1,19 @@
+{
+    "version": "1.0",
+    "description": "Worker type definitions for cluster deployment. worker_factory.ps1 reads this to create typed workers.",
+    "deploy_plan": [
+        {"type": "generic", "count": 6,  "pipe_prefix": "Cluster_Wkr_generic", "description": "General-purpose: powershell, cmd, inline"},
+        {"type": "file",    "count": 4,  "pipe_prefix": "Cluster_Wkr_file",    "description": "File I/O operations"},
+        {"type": "process", "count": 2,  "pipe_prefix": "Cluster_Wkr_process", "description": "Process management"},
+        {"type": "system",  "count": 2,  "pipe_prefix": "Cluster_Wkr_system",  "description": "System administration"},
+        {"type": "wsl",     "count": 1,  "pipe_prefix": "Cluster_Wkr_wsl",     "description": "WSL/Linux commands"},
+        {"type": "user",    "count": 1,  "pipe_prefix": "Cluster_Wkr_user",    "description": "User-context execution"}
+    ],
+    "notes": [
+        "Worker naming: {type}_{n} (e.g. file_1, generic_3)",
+        "Pipe naming:   {pipe_prefix}_{n} (e.g. Cluster_Wkr_file_1)",
+        "Directory:     cluster/{type}_{n}/",
+        "Pool file:     cluster/.worker_pool.json",
+        "Each worker runs worker_generic.ps1 with -WorkerId {type}_{n} -Type {type}"
+    ]
+}

@@ -1,0 +1,8 @@
+[
+    {"cmd_id": "test_echo", "command": "echo BRIDGE_TEST_OK", "type": "powershell", "timeout": 10,
+     "expect_stdout": "BRIDGE_TEST_OK", "expect_exit_code": 0},
+    {"cmd_id": "test_pwd", "command": "pwd", "type": "powershell", "timeout": 10,
+     "expect_stdout": "", "expect_exit_code": 0},
+    {"cmd_id": "test_dir", "command": "Get-ChildItem $env:TEMP | Select-Object -First 1 | Out-String", "type": "powershell", "timeout": 10,
+     "expect_exit_code": 0}
+]

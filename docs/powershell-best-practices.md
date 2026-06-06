@@ -110,11 +110,67 @@ function Internal-Helper {
 }
 ```
 
-### Import-Module -Force
+### Import-Module -Force 作用域陷阱
+
+#### 基本用法
 ```powershell
 # 每次导入时强制重新加载，开发调试时使用
 Import-Module (Join-Path $modulesDir "MyModule.psm1") -Force
 ```
+
+#### 为什么在 dot-source 文件中用 -Force 会炸
+
+**`Import-Module -Force` 会先移除(Remove-Module)旧模块实例，再重新加载。** 如果该模块在更早的 dot-source 文件中已被函数引用绑定，这些函数会指向已移除的模块实例 → 后续调用静默失败。
+
+```powershell
+# 文件 A.ps1（先 dot-source）—— 错误的写法
+Import-Module BridgeCommon.psm1 -Force   # 移除旧实例 → 创建新实例
+function A { Write-BridgeLog "hello" }  # 绑定到当前实例
+
+# 文件 B.ps1（后 dot-source）
+function B { Write-BridgeLog "world" }  # 绑定到另一个实例
+
+# 主脚本（点引用顺序：A.ps1 在先，B.ps1 在后）
+. .\A.ps1  # Import-Module -Force → 移除旧模块 → 函数 A 绑定到这个实例
+. .\B.ps1  # B 也绑定到这个实例 — 看起来都对
+
+# 但如果 B.ps1 也有 Import-Module -Force:
+. .\B.ps1  # 又移除一次 → 函数 A 的函数体内指向已移除的实例！→ 静默失败
+```
+
+#### 核心机制
+
+PowerShell 5.1 中，每次 `Import-Module -Force` 执行的是：
+1. `Remove-Module` — 移除旧的模块实例（解除所有已建立的函数绑定）
+2. `Import-Module` — 创建新实例，重新建立绑定
+
+dot-source 文件在加载时绑定模块函数引用。后续再 `Import-Module -Force` 不会更新已 dot-source 过的函数内部的引用。
+
+#### 正确做法
+
+```powershell
+# ✅ 正确：所有 Import-Module -Force 集中在主脚本，在所有 dot-source 之前
+
+# watcher.ps1（主脚本）
+$modulesDir = Join-Path $PSScriptRoot "..\modules"
+Import-Module (Join-Path $modulesDir "BridgeCommon.psm1") -Force
+Import-Module (Join-Path $modulesDir "BridgeRules.psm1") -Force
+
+# 然后再 dot-source 所有 .ps1 文件
+. .\lib\logging.ps1      # 可以安全调用 Write-BridgeLog
+. .\lib\common.ps1       # 可以安全调用 Write-BridgeLog
+. .\handlers\*.ps1       # 所有 handler 都可以安全调用模块函数
+
+# ❌ 错误：在 dot-source 的 .ps1 文件中放 Import-Module
+# lib/common.ps1 不应该包含：
+#   Import-Module ... -Force  ← 会破坏之前 dot-source 文件的绑定
+```
+
+#### 检测方法
+如果观察到以下现象，可能是此问题：
+- 某些函数调用模块导出函数时静默返回空/$null
+- 同一个函数在独立测试时正常，在 dot-source 后被调用不正常
+- 错误日志中没有异常抛出（因为绑定到已移除实例的调用不会抛出终止错误）
 
 ---
 
@@ -351,6 +407,46 @@ $script:utf8 = [System.Text.UTF8Encoding]::new($false)  # UTF-8 No BOM
 [System.IO.File]::AppendAllText($path, $content, $script:utf8)
 ```
 
+### 日志单写入者模式（Logging Single-Writer Pattern）
+
+#### 规则
+核心日志函数 `Log` 只能通过 **一种机制** 写入日志文件。不要在同一路径上叠加 AppendAllText 和 Write-BridgeLog（或任何其他日志写入函数），否则每行日志会出现重复。
+
+#### 为什么单写入者
+```powershell
+# ❌ 错误：双写 → 每条日志产生两行
+function Log { param([string]$m)
+    [System.IO.File]::AppendAllText($logFile, "$ts | $m`r`n", $utf8)  # 写入一次
+    try { Write-BridgeLog -Message $m -LogFile $logFile } catch { }    # 再写一次！
+}
+# 结果：
+# 23:02:30.499 | PID lock acquired: 41196
+# 23:02:30.500 | PID lock acquired: 41196    ← 重复！
+```
+
+#### 正确做法
+```powershell
+# ✅ 正确：核心 Log 只用一个写入路径
+function Log { param([string]$m)
+    try {
+        $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+        [System.IO.File]::AppendAllText($script:logFile, "$ts | $m`r`n", $script:utf8)
+    } catch {
+        # 主路径失败时写 fallback
+        try {
+            $fallbackPath = Join-Path $script:baseDir ".watcher_fallback.log"
+            $t = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+            [System.IO.File]::AppendAllText($fallbackPath, "$t | LOG_FAIL: $($_.Exception.Message)`r`n", $script:utf8)
+        } catch {}
+    }
+}
+```
+
+#### Write-BridgeLog 的定位
+- Write-BridgeLog 是模块（BridgeCommon.psm1）提供的通用写入函数，用于**非核心路径**（如命令结果写入）
+- 核心 `Log` 函数本身不应调用 Write-BridgeLog，否则构成双写
+- Write-BridgeLog 内部的 `catch { # Silent }` 是设计使然（日志失败不崩溃进程），不是 bug
+
 ---
 
 ## 8. 变量作用域：$script: / $global: / 模块作用域
@@ -425,166 +521,4 @@ if ($psObj.property -eq $value) { }  # ✅ 安全
 ### 安全模式
 ```powershell
 # 对于不确定类型的变量，先检查
-if ($obj -is [hashtable]) {
-    # 用哈希表的方式访问
-    $obj["key"]
-} elseif ($obj -is [PSCustomObject]) {
-    # 用属性的方式访问
-    $obj.property
-}
-```
-
-### $null 判断
-```powershell
-# 推荐：把 $null 放在左边
-if ($null -eq $var) { }  # ✅
-if ($var -eq $null) { }  # 也可以但可能触发类型转换
-
-# 特别注意：数组为空不是 $null
-$arr = @()
-$null -eq $arr       # → $false
-$arr.Count -eq 0     # → $true
-
-# 安全的存在性检查
-if ($var) { }         # 非 $null、非空、非 0、非 $false → true
-if (-not $var) { }    # 取反
-```
-
----
-
-## 10. 数组与 += 操作
-
-### 性能问题
-```powershell
-# ❌ 低效：每次 += 创建新数组
-$result = @()
-foreach ($item in $collection) {
-    $result += $item  # 每次复制整个数组！
-}
-
-# ✅ 高效：用 ArrayList 或 List
-[System.Collections.ArrayList]$list = @()
-foreach ($item in $collection) {
-    [void]$list.Add($item)
-}
-
-# ✅ 或直接用 PowerShell 集合
-$list = [System.Collections.Generic.List[object]]::new()
-foreach ($item in $collection) {
-    $list.Add($item)
-}
-```
-
-### 类型混杂的数组
-```powershell
-$arr = @()
-$arr += "string"           # [string[]] → ok
-$arr += @{key="value"}     # 混入 HashTable → ok
-$arr += [PSCustomObject]@{p="v"}  # 混入 PSObject → ok
-
-# 但如果 arr 被强类型约束
-[string[]]$typed = @()
-$typed += "string"         # ✅
-$typed += 42               # 自动转 "42"
-$typed += @{key="value"}   # ❌ 无法转换
-```
-
----
-
-## 11. HashTable 枚举中修改
-
-### 禁止模式
-```powershell
-$ht = @{a=1; b=2; c=3}
-
-# ❌ 错误：枚举过程中修改
-foreach ($key in $ht.Keys) {
-    if ($condition) { $ht.Remove($key) }  # 运行时异常！
-}
-```
-
-### 正确模式
-```powershell
-# ✅ 先把要移除的收集起来，完了再移除
-$toRemove = @()
-foreach ($key in $ht.Keys) {
-    if ($condition) { $toRemove += $key }
-}
-foreach ($key in $toRemove) {
-    $ht.Remove($key)
-}
-
-# ✅ 或者复制 Keys
-foreach ($key in @($ht.Keys)) {
-    if ($condition) { $ht.Remove($key) }
-}
-```
-
----
-
-## 12. 错误处理模式
-
-### 推荐的日志安全模式
-```powershell
-# 任何可能出错的代码都包 try/catch
-try {
-    Some-Operation
-} catch {
-    # catch 块内部也要安全
-    try {
-        Log "Error: $($_.Exception.Message)"
-    } catch {
-        # 日志失败也不能抛异常
-    }
-}
-```
-
-### 命令执行结果处理的推荐模式
-```powershell
-$toRemove = @()
-foreach ($item in $items) {
-    try {
-        $result = Process-Item $item
-        try {
-            Log-Result $result  # 次要用 try/catch
-        } catch {
-            Log "Logging failed: $($_.Exception.Message)"
-        }
-        $toRemove += $item.Id
-    } catch {
-        Log "Item $item failed: $($_.Exception.Message)"
-        # 即使失败也标记为已处理（避免阻塞队列）
-        $toRemove += $item.Id
-    }
-}
-# 清理
-foreach ($id in $toRemove) { Remove-Item $id }
-```
-
-### New-CommandResult 模式（Bridge 项目）
-```powershell
-# 统一的结果对象
-$result = New-CommandResult -CmdId $cid -ExitCode 0 -Stdout "OK"
-Write-CommandResult -Result $result -Directory $script:baseDir
-```
-
----
-
-## 附录：Bridge 项目经验对照表
-
-| 问题 | 文件 | 修复 PR/提交 |
-|------|------|-------------|
-| UTF-8 BOM 导致模块加载失败 | `BridgeRules.psm1` | 转为 UTF-8 with BOM |
-| Hashtable 混入 PSObject 数组 | `BridgeRules.psm1` | `@{}` → `[PSCustomObject]@{}` |
-| `param()` 内反引号转义 | `watcher.ps1` | 移除 ` 转义 |
-| `${function:Name}` 作用域 | `BridgeRules.psm1` | 改为 `function` 关键字 + Export |
-| 单条 inflight 崩溃阻塞清理 | `watcher.ps1` | 每条 item 独立 try/catch |
-| `$script:lastCmdId` 预处理前赋值 | `watcher.ps1` | 移到预处理成功后 |
-| 9P 缓存导致文件不同步 | VM 挂载 | 用 Read 工具而非 bash 读取 |
-| Housekeeping 崩溃导致主循环停摆 | `watcher.ps1` | 每条 housekeeping 独立 try/catch |
-
----
-
-> **最后更新**: 2026-06-06  
-> **适用范围**: PowerShell 5.0 (Windows)  
-> **参考**: [Microsoft PowerShell 5.0 文档](https://docs.microsoft.com/en-us/powershell/scripting/powershell-scripting?view=powershell-5.1)
+if ($

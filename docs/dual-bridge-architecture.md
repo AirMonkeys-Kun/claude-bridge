@@ -1,6 +1,6 @@
 # 双桥架构 — 代理桥 + 通信桥
 
-> 最后更新：2026-06-05 | 版本：V1.2
+> 最后更新：2026-06-06 | 版本：V1.3
 
 ---
 
@@ -8,10 +8,56 @@
 
 Claude 在 Cowork 环境中通过两座"桥"突破了原本的能力边界：
 
-1. **代理桥 (Proxy Bridge)** — localhost:4000，让 Claude 能使用非原生 AI 后端（xiaomi mimo、zhipu GLM），同时保持完整的 Anthropic API 兼容性
-2. **通信桥 (Communication Bridge)** — watcher + queue.txt + worker pool，让 Claude 能在 VM 沙箱内执行宿主机操作（PowerShell、文件、进程管理等）
+1. **代理桥 (Proxy Bridge)** — via tap0 网关代理，让 Claude 能使用非原生 AI 后端（xiaomi mimo、zhipu GLM），同时保持完整的 Anthropic API 兼容性
+2. **通信桥 (Communication Bridge)** — watcher + worker pool + TCP/文件双通道，让 Claude 能在 VM 沙箱内执行宿主机操作（PowerShell、文件、进程管理等）
 
 两座桥各司其职，组合起来使 Claude 从一个"只能聊天的 AI"变成了一个"能操作宿主机的全栈助手"。
+
+---
+
+## Cowork 沙箱架构（2026-06-06 更新）
+
+Cowork 桌面端已完成沙箱网络架构升级。沙箱从完全隔离（`--unshare-net`）升级为具备真实网络（tap0 网卡），通信桥的入口通道可从纯文件演变为 **TCP + 文件双通道**。
+
+### 沙箱网络拓扑
+
+```
+Linux VM (Cowork Sandbox)
+  bwrap: --dev-bind / / --proc /proc --unshare-pid --die-with-parent
+  (不再有 --unshare-net，沙箱有完整网络能力)
+
+  ├── tap0: 172.16.10.3/24     ← 真实网络，可直连宿主机
+  ├── Gateway: 172.16.10.1     ← 默认网关 + DNS
+  ├── SSH: port 22             ← 管理通道
+  └── Proxy: 172.16.10.254:7897 ← HTTP/HTTPS 代理
+
+  RPC 通道:
+  ├── virtio-serial "claude-daemon-console" ← coworkd ↔ 宿主机 (bwrap 外)
+  ├── virtiofs ← 文件共享 (outputs/uploads/memory/skills)
+  └── tap0 TCP ← 沙箱可用 (0.8ms 跨 VM RTT)
+```
+
+### 跨 VM 通信延迟基准（2026-06-06 实测）
+
+| 通道 | 平均延迟 | p99 | 说明 |
+|------|---------|-----|------|
+| virtiofs 文件 (fsync) | 12.7ms | 16.5ms | 旧桥写入方式 |
+| virtiofs 文件 (无 fsync) | 1.9ms | 2.7ms | 数据可能不持久 |
+| ICMP ping 网关 | 0.3ms | 0.7ms | 纯网络 RTT |
+| TCP connect (跨 VM) | **0.8ms** | 0.9ms | **新可用通道** |
+| TCP localhost echo | 0.038ms | 0.088ms | 沙箱内进程间 |
+| Named Pipe (Windows 内) | 18.6ms | 29ms | watcher → worker |
+
+### 架构演进对比
+
+| 项目 | 旧架构 | 新架构 |
+|------|--------|--------|
+| 网络隔离 | `--unshare-net`（完全隔离） | **已移除**，tap0 网卡 |
+| HTTP 代理 | socat → unix socket → 宿主机 | 直接走网关 172.16.10.254:7897 |
+| 设备访问 | `--dev /dev`（最小集） | `--dev-bind / /`（完整 rootfs） |
+| 代理环境变量 | bwrap setenv 20+ 行 | 外层注入 3 行 |
+| 通信桥入口 | queue.txt (唯一选择) | **queue.txt + TCP (可选)** |
+| vsock | 设备不可见，socket EPERM | 设备可见但仍 EPERM (seccomp) |
 
 ---
 
@@ -19,22 +65,22 @@ Claude 在 Cowork 环境中通过两座"桥"突破了原本的能力边界：
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        Cowork Desktop                               │
+│                    Cowork Desktop                                    │
 │  ┌──────────────────────────────────────────────────────────────┐   │
-│  │  Claude Agent (本体)                                          │   │
-│  │  • 对话推理 ← 走代理桥                                        │   │
-│  │  • 工具调用 (Read/Write/Bash) ← 本地 VM 内操作                │   │
-│  │  • 宿主机操作 ← 走通信桥                                      │   │
+│  │  Claude Agent (Linux VM Sandbox, tap0: 172.16.10.3)         │   │
+│  │  • 对话推理 ← 走代理桥 (HTTP via tap0 → 网关代理)             │   │
+│  │  • 工具调用 (Read/Write/Bash) ← 本地 VM 内操作               │   │
+│  │  • 宿主机操作 ← 走通信桥 (TCP 0.8ms / queue.txt Fallback)   │   │
 │  └──────────┬──────────────────────────┬────────────────────────┘   │
 │             │                          │                            │
 │     ┌───────▼───────┐          ┌───────▼───────┐                    │
 │     │   代理桥       │          │   通信桥       │                    │
-│     │ localhost:4000 │          │ queue.txt     │                    │
+│     │ via tap0      │          │ TCP + 文件    │                    │
 │     │ V13 server.py │          │ watcher V2.2  │                    │
 │     └───────┬───────┘          └───────┬───────┘                    │
 │             │                          │                            │
 └─────────────┼──────────────────────────┼────────────────────────────┘
-              │ HTTPS                    │ Named Pipes
+              │ HTTP via tap0            │ TCP (0.8ms) + queue.txt
               ▼                          ▼
     ┌──────────────────┐      ┌─────────────────────┐
     │  xiaomi (mimo)    │      │  Worker Pool         │
@@ -57,7 +103,7 @@ Claude 在 Cowork 环境中通过两座"桥"突破了原本的能力边界：
 ## 代理桥 (Proxy Bridge)
 
 **位置：** `D:\zebbingo\tools\claude-desktop-config\proxy\server.py` (V13)
-**端口：** localhost:4000
+**端口：** via tap0 网关代理
 **协议：** HTTP (Anthropic Messages API passthrough)
 
 ### 核心能力
@@ -82,36 +128,20 @@ Claude 在 Cowork 环境中通过两座"桥"突破了原本的能力边界：
 | 流式传输 | 稳定连续，无断裂 |
 | Audit 日志 | 每请求记录 provider/model/latency/status |
 
-### 代理 vs 直连 A/B 对比 (2026-06-05)
+### 代理桥代码质量评估（2026-06-06）
 
-| 测试场景 | 总耗时 | 首块延迟 | 块间隔(avg) | 块间隔(max) | 输出tok | think len |
-|---------|--------|---------|------------|------------|--------|-----------|
-| 非流式简单 (xiaomi) | 2027ms | 2027ms | - | - | 17 | 31 |
-| 流式简单 (xiaomi) | 4227ms | 6ms | 52ms | 307ms | 48 | 137 |
-| 流式推理 (xiaomi) | 13357ms | 0ms | 76ms | 255ms | 457 | 442 |
-| 流式+adaptive thinking (xiaomi) | 7453ms | 0ms | 73ms | 370ms | 296 | 114 |
-| 流式代码生成 (xiaomi) | 7909ms | 0ms | 78ms | 490ms | 260 | 85 |
-| 流式中文 (xiaomi) | 4492ms | 0ms | 65ms | 181ms | 111 | 141 |
-| 多轮对话 (xiaomi) | 2303ms | 0ms | 73ms | 409ms | 33 | 131 |
-| Haiku 模型 (zhipu) | 7170ms | 0ms | 120ms | 791ms | 56 | 0 |
-| 长文生成 (xiaomi) | 15860ms | 0ms | 74ms | 477ms | 395 | 810 |
-| 长文吞吐量 | - | - | - | - | 395 tok / 15.9s = 24.9 tok/s |
+server.py (1970 行) 功能完善，代码质量整体可控：
 
-**结论：** 代理首块延迟 0-6ms，SSE 零开销直传。主要延迟来自后端模型（2-5s），
-与直连 Anthropic 模式感受接近，差异在模型生成速度而非代理本身。
+| 指标 | 状态 | 说明 |
+|------|------|------|
+| 全局可变状态 | 26+ 个 | asyncio 单线程下安全，但增加理解成本 |
+| 最大函数 | 204 行 (`_generate_openai_stream`) | 流式转换逻辑，拆分收益有限 |
+| 配置热重载 | 无锁 | `_reload_config()` 在 asyncio 内同步执行，安全 |
+| 请求去重 | asyncio Future | 正确实现，无竞争 |
+| 依赖 | FastAPI + httpx + PyYAML | 标准组合，无特殊风险 |
+| 安全 | API keys 明文存储在 config.yaml | 内网环境可接受，不建议公网暴露 |
 
-### 关键修复历程
-
-1. **httpx 0.28.1 兼容** — `Response` 无 `__aenter__`，改用 `send(stream=True)` + `aclose()`
-2. **Adaptive thinking 透传** — 不再强制转换为 `enabled` + 固定 budget
-3. **GZipMiddleware 移除** — SSE 流不需要压缩
-4. **`_sse_raw` 零拷贝** — 未修改事件直接转发原始 JSON 字符串
-5. **浅层 sort_keys** — 减少 payload 处理 CPU 开销
-6. **429 自动熔断降级** — quota exhausted 触发 failover，不再直接返回客户端
-7. **Thinking display 透传** — 保留 `display` 字段（`"summarized"` / `"omitted"`）
-8. **OpenAI 路径 thinking 修复** — thinking 配置正确加入 OAI payload
-9. **一键热切换** — `POST /admin/provider` + `GET /admin/status`
-10. **粒度化时序日志** — STREAM_TIMING + max_think_gap 区分模型思考 vs 网络延迟
+**结论：代理桥不需要重构。** 它已经是 HTTP 协议，走网络通道，性能和稳定性都符合预期。
 
 ---
 
@@ -119,7 +149,7 @@ Claude 在 Cowork 环境中通过两座"桥"突破了原本的能力边界：
 
 **位置：** `D:\zebbingo\tools\claude-bridge\`
 **核心：** watcher.ps1 V2.2 + worker_factory.ps1 V2.2
-**协议：** queue.txt 文件 IPC + Named Pipe 分发
+**协议：** queue.txt 文件 IPC + Named Pipe 分发 (当前) / TCP (规划中)
 
 ### 核心能力
 
@@ -143,15 +173,26 @@ Claude 在 Cowork 环境中通过两座"桥"突破了原本的能力边界：
 | Dispatch 通道 | pipe_direct (直连) |
 | Worker Pool | process×2, file×4, generic×4, system×2, wsl×1, user×1 |
 
-### 测试验证
+### 通信桥代码质量评估（2026-06-06）
 
-| 测试 | 结果 |
-|------|------|
-| echo/compute/datetime | 全部通过, 1-87ms |
-| file-io (写+读+删) | 通过, 25ms |
-| multiline output | 通过, 2ms |
-| error handling | 通过, 正确捕获异常 |
-| port-check | 通过, 940ms (Get-NetTCPConnection 较慢) |
+| 组件 | 行数 | 问题 | 严重性 |
+|------|------|------|--------|
+| watcher.ps1 | 920 | 主循环混合 10+ 职责，383 行 try/catch | 中 |
+| watcher.ps1 | 920 | 5 处重复工具函数（文件读写、日志、心跳） | 低 |
+| watcher.ps1 | 920 | V21 + legacy 双路径并存 | 中 |
+| queue.txt | — | 无文件锁，并发竞争 | 高 |
+| result JSON | — | 字段命名不一致 (`exit_code` vs `e`) | 低 |
+| 全局变量 | ~20 | 脚本作用域可变状态，难追踪 | 低 |
+
+### TCP 迁移路线（规划中）
+
+沙箱现在有 tap0 真实网络（0.8ms RTT），queue.txt 不再是唯一通道。详细方案见 [`docs/TCP-MIGRATION-PLAN.md`](TCP-MIGRATION-PLAN.md)。
+
+**分阶段迁移策略：**
+1. Phase 1：Windows 端新增 bridge_agent.py TCP 服务，写入 queue.txt 复用现有 watcher
+2. Phase 2：沙箱端 bridge_client.py，TCP 优先，queue.txt fallback
+3. Phase 3：bridge_agent 直接 Named Pipe 分发，跳过 queue.txt
+4. Phase 4（可选）：bridge_agent 替代 watcher 成为新主入口
 
 ---
 
@@ -176,30 +217,35 @@ Claude 在 Cowork 环境中通过两座"桥"突破了原本的能力边界：
   │
   ├─ 需要 AI 推理 → 代理桥 → xiaomi mimo-v2.5-pro → 流式响应
   │
-  ├─ 需要执行命令 → 通信桥 → queue.txt → watcher → worker → 结果
+  ├─ 需要执行命令 → 通信桥 → TCP/queue.txt → watcher → worker → 结果
   │
   ├─ 需要读写文件 → 直接 VM 内操作 (Read/Write/Edit tools)
   │
   └─ 组合操作 → 代理桥推理 + 通信桥执行 + 文件操作，多轮交替
 ```
 
-### 结果等待方式（V1.1 新增）
+### 结果等待方式
 
-不再使用固定 `sleep N` 猜测等待时间，改用 `bridge_wait.py` 轮询：
+当前支持两种方式：
 
+**方式一：TCP 直连（规划中，见 TCP-MIGRATION-PLAN.md）**
+```bash
+# 未来：直接 TCP 发送命令，同步等待响应
+python3 bridge_client.py '{"command":"echo hello","type":"powershell","timeout":30}'
+```
+
+**方式二：文件轮询（当前）**
 ```bash
 # 1. 提交命令
 echo '{"state":"pending","cmd_id":"test_1","command":"echo hello","type":"process","timeout":30}' > queue.txt
 
-# 2. 100ms 轮询等待结果（自动检测文件出现，立即返回）
+# 2. 100ms 轮询等待结果
 python3 bridge_wait.py test_1 30
 ```
 
-`bridge_wait.py` 位于 `watcher/bridge_wait.py`，基于 9P 文件系统 100ms 轮询，检测到结果文件后等 50ms flush grace period，然后输出完整 JSON 结果。
-
 ---
 
-### Provider 管理 (V13+ 新增)
+### Provider 管理 (V13+)
 
 一键切换脚本位于 `watcher/switch_provider.py`：
 
@@ -236,6 +282,7 @@ curl http://127.0.0.1:4000/admin/status
 - 结果：`watcher\r_{cmd_id}.json`
 - 日志：`watcher\watcher.log`
 - Worker：`worker_factory.ps1 -DeployAll`
+- TCP 迁移方案：`docs/TCP-MIGRATION-PLAN.md`
 
 ### 互相依赖
 - 代理桥可以通过通信桥重启
@@ -251,3 +298,4 @@ curl http://127.0.0.1:4000/admin/status
 | 2026-06-05 | V1.0 | 初始版本：双桥架构文档，包含代理桥 V13 全部修复记录和通信桥 V2.2 测试结果 |
 | 2026-06-05 | V1.1 | 新增 bridge_wait.py 结果等待方式（100ms 轮询替代固定 sleep）；新增代理 vs 直连 A/B 对比基准数据 |
 | 2026-06-05 | V1.2 | 新增 V13+ 精细化运营：429 熔断降级、thinking display 透传、OpenAI 路径 thinking 修复、`/admin/provider` 一键热切换、STREAM_TIMING 粒度化日志、TUN 模式排查 |
+| 2026-06-06 | V1.3 | **沙箱架构升级**：更新架构图反映 tap0 网络（`--unshare-net` 已移除），新增跨 VM 延迟基准数据，新增 TCP 迁移路线图和 `TCP-MIGRATION-PLAN.md` 引用，新增两桥代码质量评估 |

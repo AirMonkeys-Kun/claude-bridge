@@ -285,6 +285,49 @@
 - 6 小时后自动触发
 - 如果用户重新使用代理并产生新流量，建议手动触发一次快速验证
 
+## Run #9 — 2026-06-06 18:07 (Scheduled Self-Evolve)
+
+### Scan Results
+
+| 维度 | 状态 | 详情 |
+|------|------|------|
+| 代理桥 (Proxy) | ✅ 运行中 | PID 24284, port 4000 LISTENING, v13, zhipu GLM-5.1 |
+| Watcher 心跳 | ✅ 活跃 | 18:06:02 — 实时更新 |
+| Guardian v3 | ✅ 运行中 | 60s 周期，17:37 最后检查：watcher alive, 14/14 workers, proxy alive |
+| Worker 池 | ✅ 14/14 存活 | Guardian 确认 |
+| Provider (zhipu) | ✅ 正常 | 最近请求全部 200 OK，延迟 4.5-8s |
+| 审计日志 | ⚠️ 重复写入 Bug | 每条记录写两次（完全相同时间戳），已修复 |
+| Debug 日志 | ✅ 正常 | 最新请求 18:04，全部 success |
+| 记忆文件 | ✅ 全部最新 | 4 份记忆文件内容与当前状态一致 |
+| 定时任务 | ⚠️ 3 个禁用未清理 | fix-wsl-paths-now, fix-wsl-paths, restart-bridge-v18（已延期 8 个周期） |
+
+### Root Cause Found: 重复审计日志
+
+**Bug**: `proxy_audit.log` 中每条记录被写两次，时间戳完全相同到微秒级。
+
+**根因**: `server.py` L305-310 在模块顶层添加 logging handler。`uvicorn.run("server:app")` 导致模块代码执行两次（一次 `__main__`，一次 `server` import），同一个 `claude-bridge-audit` logger 被添加了两个 handler。
+
+**影响**: 审计日志大小翻倍，不影响请求处理逻辑。
+
+### Actions Taken
+
+1. **审计日志 handler 去重** — `server.py` L308 添加 `if not _audit_logger.handlers:` 守卫
+   - Before: 无条件添加 handler → 双重写入
+   - After: 仅在无 handler 时添加 → 单次写入
+   - 风险: 低（仅影响日志初始化路径）
+   - 生效时机: 下次代理重启后生效
+
+### Deferred (Cannot Fix Autonomously)
+
+- **代理重启以应用修复** — 代理正在处理活跃流量（18:04 有新请求），避免中断。修复将在下次自然重启时生效。
+- **删除 3 个禁用定时任务** — 已延期 8 个周期，需用户通过 UI 删除
+- **验证修复效果** — 重启后需确认审计日志不再重复
+
+### Next Recommended Run
+
+- 6 小时后自动触发
+- 代理重启后建议手动触发一次验证审计日志修复效果
+
 ## Run #8 — 2026-06-06 12:04 (Scheduled Self-Evolve)
 
 ### Scan Results

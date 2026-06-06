@@ -470,16 +470,15 @@ function Invoke-GuardianCheck {
     if (-not $agentAlive -and (Test-Path $script:agentScript)) {
         Log "BridgeAgent: DOWN — port $($script:agentPort) not listening, restarting..."
         try {
-            $aPsi = New-Object System.Diagnostics.ProcessStartInfo
-            $aPsi.FileName = "python.exe"
-            $aPsi.Arguments = "`"$script:agentScript`""
-            $aPsi.UseShellExecute = $false
-            $aPsi.CreateNoWindow = $true
-            $aPsi.RedirectStandardOutput = $true
-            $aPsi.RedirectStandardError = $true
-            $agentProc = [System.Diagnostics.Process]::Start($aPsi)
+            $agentLogStdout = Join-Path $script:watcherDir "bridge_agent_stdout.log"
+            $agentLogStderr = Join-Path $script:watcherDir "bridge_agent_stderr.log"
+            $agentProc = Start-Process -FilePath "python.exe" `
+                -ArgumentList "`"$script:agentScript`"" `
+                -NoNewWindow -PassThru `
+                -RedirectStandardOutput $agentLogStdout `
+                -RedirectStandardError $agentLogStderr
             if ($agentProc) {
-                Log "  Launched bridge_agent PID=$($agentProc.Id)"
+                Log "  Launched bridge_agent PID=$($agentProc.Id) (stdout->$agentLogStdout)"
                 Start-Sleep -Seconds 2
                 $verify = Get-NetTCPConnection -LocalPort $script:agentPort -State Listen -ErrorAction SilentlyContinue
                 if ($verify) {

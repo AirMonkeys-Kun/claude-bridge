@@ -26,18 +26,41 @@ $Script:FileRetryDelayMs = 50
 function Write-SafeFile {
     <#
     .SYNOPSIS
-        Write text to a file with retry on failure.
+        Write text to a file with retry on failure, using atomic temp+rename.
+    .DESCRIPTION
+        DEFECT FIXED (2026-06-06): Previous version used direct WriteAllText() which
+        causes 9P/virtiofs cache issues — the Linux VM can see a partially-written file
+        via the 9P protocol. When bridge_wait.py polls for r_{cmd_id}.json result files,
+        it may find the file exists but contains incomplete JSON, leading to parse errors
+        or stale data. The 50ms "flush buffer" sleep in bridge_wait.py was a workaround
+        but not a root fix.
+
+        Root cause: WriteAllText opens the file, writes content, then closes. On 9P/virtiofs
+        the file metadata (existence, size) is updated before the content is fully flushed
+        to the host filesystem. A concurrent reader on the VM side sees the file "exists"
+        but gets partial or cached-stale content.
+
+        Fix: Write to a temp file first ($Path.tmp), then atomically Move-Item to the
+        final path. On NTFS, Move-Item is atomic for same-volume renames, so the reader
+        on the VM side either sees no file (old state) or a complete file (new state).
+        There is no intermediate "partial" state visible.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Path,
         [Parameter(Mandatory)][string]$Content
     )
+    $tmpPath = "$Path.tmp"
     for ($i = 0; $i -lt $Script:MaxFileRetries; $i++) {
         try {
-            [System.IO.File]::WriteAllText($Path, $Content, $Script:Utf8NoBom)
+            # Phase 1: Write to temp file
+            [System.IO.File]::WriteAllText($tmpPath, $Content, $Script:Utf8NoBom)
+            # Phase 2: Atomic rename to final path (same-volume Move is atomic on NTFS)
+            Move-Item -LiteralPath $tmpPath -Destination $Path -Force
             return
         } catch {
+            # Clean up temp file on failure
+            try { Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue } catch {}
             if ($i -eq $Script:MaxFileRetries - 1) { throw }
             Start-Sleep -Milliseconds $Script:FileRetryDelayMs
         }
@@ -115,16 +138,22 @@ function Write-BridgeLog {
 function Write-Heartbeat {
     <#
     .SYNOPSIS
-        Write current timestamp to a heartbeat file.
+        Write current timestamp to a heartbeat file (atomic write).
+    .DESCRIPTION
+        Uses temp+rename to avoid 9P cache issues — same pattern as Write-SafeFile.
+        Heartbeat files are polled by Guardian and other monitors; stale reads cause
+        false "dead" detections.
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
     try {
+        $tmpPath = "$Path.tmp"
         [System.IO.File]::WriteAllText(
-            $Path,
+            $tmpPath,
             (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"),
             $Script:Utf8NoBom
         )
+        Move-Item -LiteralPath $tmpPath -Destination $Path -Force
     } catch { }
 }
 
@@ -156,12 +185,14 @@ function Test-HeartbeatAlive {
 function Enter-PidLock {
     <#
     .SYNOPSIS
-        Write current PID to a lock file.
+        Write current PID to a lock file (atomic write).
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
     try {
-        [System.IO.File]::WriteAllText($Path, [string]$PID, $Script:Utf8NoBom)
+        $tmpPath = "$Path.tmp"
+        [System.IO.File]::WriteAllText($tmpPath, [string]$PID, $Script:Utf8NoBom)
+        Move-Item -LiteralPath $tmpPath -Destination $Path -Force
     } catch { }
 }
 
@@ -260,7 +291,7 @@ function Write-CommandResult {
 function Invoke-LogRotation {
     <#
     .SYNOPSIS
-        Trim a log file to a maximum number of lines.
+        Trim a log file to a maximum number of lines (atomic write).
     #>
     [CmdletBinding()]
     param(
@@ -272,7 +303,9 @@ function Invoke-LogRotation {
         $lines = [System.IO.File]::ReadAllLines($Path, $Script:Utf8NoBom)
         if ($lines.Count -gt $MaxLines) {
             $kept = $lines[($lines.Count - $MaxLines)..($lines.Count - 1)]
-            [System.IO.File]::WriteAllLines($Path, $kept, $Script:Utf8NoBom)
+            $tmpPath = "$Path.tmp"
+            [System.IO.File]::WriteAllLines($tmpPath, $kept, $Script:Utf8NoBom)
+            Move-Item -LiteralPath $tmpPath -Destination $Path -Force
         }
     } catch { }
 }

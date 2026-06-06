@@ -1,13 +1,5 @@
-{
+﻿{
     "workers":  [
-                    {
-                        "id":  "generic_1",
-                        "started":  "2026-06-04 15:28:29",
-                        "pid":  28848,
-                        "type":  "generic",
-                        "queue":  "cluster\\generic_1\\queue.txt",
-                        "pipe":  "Cluster_Wkr_generic_1"
-                    },
                     {
                         "id":  "generic_2",
                         "started":  "2026-06-04 15:28:29",

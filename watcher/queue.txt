@@ -1,1 +1,1 @@
-{"state":"idle","cmd_id":"","command":"","type":""}
+{"state":"running","cmd_id":"bridge-v22-git-x9z"}

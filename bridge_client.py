@@ -29,11 +29,32 @@ import uuid
 
 BRIDGE_HOST = os.environ.get("BRIDGE_HOST", "172.16.10.254")
 BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "19850"))
-BRIDGE_DIR = os.environ.get(
-    "BRIDGE_DIR",
-    "/sessions/hopeful-determined-maxwell/mnt/tools/claude-bridge/watcher"
-)
 TCP_TIMEOUT = 5  # seconds to connect
+
+
+def _auto_detect_bridge_dir():
+    """Walk up from script location to find tools/claude-bridge/watcher."""
+    env = os.environ.get("BRIDGE_DIR")
+    if env:
+        return env
+    for start in (os.path.dirname(os.path.abspath(__file__)), os.getcwd()):
+        cur = start
+        for _ in range(10):
+            candidate = os.path.join(cur, "watcher")
+            if os.path.isdir(candidate):
+                return candidate
+            parent = os.path.dirname(cur)
+            if parent == cur:
+                break
+            cur = parent
+    import glob
+    matches = glob.glob("/sessions/*/mnt/zebbingo/tools/claude-bridge/watcher")
+    if matches:
+        return matches[0]
+    return ""
+
+
+BRIDGE_DIR = _auto_detect_bridge_dir()
 
 
 # ── TCP Bridge ─────────────────────────────────────────────────────────
@@ -211,22 +232,4 @@ def main():
         cmd = json.loads(args[0])
     elif "--cmd" in args:
         # --cmd "echo hello" --type powershell --timeout 30
-        cmd = {"command": args[args.index("--cmd") + 1]}
-        if "--type" in args:
-            cmd["type"] = args[args.index("--type") + 1]
-        if "--timeout" in args:
-            cmd["timeout"] = int(args[args.index("--timeout") + 1])
-    else:
-        # Treat first arg as the command string
-        cmd = {"command": args[0], "type": "powershell", "timeout": 30}
-
-    result, channel = send_command(cmd, force_fallback=force_fallback)
-    result["_channel"] = channel
-    print(json.dumps(result, indent=2, ensure_ascii=False))
-
-    # Exit code
-    sys.exit(result.get("exit_code", 1))
-
-
-if __name__ == "__main__":
-    main()
+        cmd = {"co

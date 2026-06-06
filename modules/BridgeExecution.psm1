@@ -8,7 +8,10 @@
     Eliminates duplication between watcher.ps1, worker_generic.ps1, and worker_template.ps1.
 #>
 
-using module BridgeCommon
+# NOTE: No 'using module' here — this module is fully self-contained.
+# 'using module BridgeCommon' was removed because it causes load failures
+# in isolated runspaces ([PowerShell]::Create() used by worker pipe servers).
+# BridgeCommon is NOT needed by any function in this module.
 
 # ══════════════════════════════════════════════════════════════════
 # Command type normalization

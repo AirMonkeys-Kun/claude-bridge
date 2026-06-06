@@ -27,12 +27,10 @@ $script:baseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:queueFile = Join-Path $script:baseDir "queue.txt"
 $script:logFile = Join-Path $script:baseDir "watcher.log"
 $script:heartbeatFile = Join-Path $script:baseDir ".watcher_heartbeat"
-$script:rulesFile = Join-Path $script:baseDir "bridge_rules.json"
-$script:errorHistoryFile = Join-Path $script:baseDir "error_history.json"
 $script:utf8 = [System.Text.UTF8Encoding]::new($false)
 
 # ══════════════════════════════════════════════════════════════════
-# Module imports (BridgeCommon + BridgeExecution)
+# Module imports (BridgeCommon + BridgeExecution + BridgeRules)
 # ══════════════════════════════════════════════════════════════════
 $modulesDir = Join-Path (Split-Path -Parent $script:baseDir) "modules"
 Import-Module (Join-Path $modulesDir "BridgeCommon.psm1") -Force
@@ -59,8 +57,6 @@ Set-Alias Read-Json   Read-SafeJson
 # State variables
 # ══════════════════════════════════════════════════════════════════
 $script:lastCmdId = ""
-$script:rulesCache = $null
-$script:cmdCounter = 0
 
 # Self-upgrade tracking
 $script:watcherScriptPath = $MyInvocation.MyCommand.Path
@@ -86,133 +82,13 @@ $script:poolLastLoad = $null
 $script:workerRR = @{}
 
 # ══════════════════════════════════════════════════════════════════
-# Rule engine loading
+# Rule engine (BridgeRules module)
 # ══════════════════════════════════════════════════════════════════
-$script:ruleEnginePath = Join-Path (Split-Path -Parent $script:baseDir) "cluster\rule_engine.ps1"
-if (Test-Path $script:ruleEnginePath) {
-    . $script:ruleEnginePath
-    Init-RuleEngine -BridgeBase (Split-Path -Parent $script:baseDir)
-    Log "Rule engine loaded from $($script:ruleEnginePath)"
-} else {
-    Log "WARNING: Rule engine not found at $($script:ruleEnginePath) — using legacy functions"
-}
+Import-Module (Join-Path $modulesDir "BridgeRules.psm1") -Force
+Init-RuleEngine -BridgeBase (Split-Path -Parent $script:baseDir)
+Log "Rule engine loaded from BridgeRules.psm1"
 
-# ── Legacy rule application (fallback when shared engine unavailable) ──
-function Legacy-ApplyRules { param([string]$cmd, [string]$ctype)
-    if (Get-Command "Apply-Rules" -Module $null -ErrorAction SilentlyContinue | Where-Object { $_.ScriptBlock.ToString() -match 'RE_baseDir' }) {
-        return $cmd
-    }
-
-    $rulesPath = $script:rulesFile
-    if (-not (Test-Path $rulesPath)) { return $cmd }
-
-    $script:cmdCounter++
-    if ($script:cmdCounter % 10 -eq 1 -or $null -eq $script:rulesCache) {
-        try {
-            $text = [System.IO.File]::ReadAllText($rulesPath, $script:utf8)
-            $parsed = ($text | ConvertFrom-Json)
-            $script:rulesCache = $parsed.rules
-            Log "[RULE] Reloaded $($script:rulesCache.Count) rules"
-        } catch {
-            Log "[RULE] Failed to load rules: $_"
-            return $cmd
-        }
-    }
-
-    $rules = $script:rulesCache
-    if (-not $rules) { return $cmd }
-
-    $modified = $cmd
-    $applied = @()
-    foreach ($rule in $rules) {
-        if ($rule.is_template) { continue }
-        $triggers = $rule.triggers
-        if ($triggers.type -ne "any" -and $triggers.type -ne $ctype) { continue }
-        if ($triggers.command_contains -and $modified -notmatch [regex]::Escape($triggers.command_contains)) { continue }
-        if ($triggers.pattern_in_command -and $modified -notmatch $triggers.pattern_in_command) { continue }
-
-        $fix = $rule.fix
-        if ($fix.action -eq "escape" -and $fix.find -and $fix.replace_with) {
-            $modified = $modified.Replace($fix.find, $fix.replace_with)
-            $applied += $rule.id
-            Log "[RULE] Applied '$($rule.id)': escaped '$($fix.find)' -> '$($fix.replace_with)'"
-        } elseif ($fix.action -eq "wrap_single_quotes") {
-            if ($modified -match 'wsl -e bash -c "(.+)"') {
-                $inner = $matches[1]
-                $modified = $modified.Replace('wsl -e bash -c "' + $inner + '"', "wsl -e bash -c '$inner'")
-                $applied += $rule.id
-                Log "[RULE] Applied '$($rule.id)': wrapped bash -c in single quotes"
-            }
-        } elseif ($fix.action -eq "use_powershell_type") {
-            Log "[RULE] '$($rule.id)' suggests using powershell type instead of cmd"
-        }
-    }
-    if ($applied.Count -gt 0) {
-        Log "[RULE] $($applied.Count) rules applied to cmd_id: $($applied -join ', ')"
-    }
-    return $modified
-}
-
-# ══════════════════════════════════════════════════════════════════
-# Error learning — log issues for pattern analysis
-# ══════════════════════════════════════════════════════════════════
-function Log-Error { param([string]$cid, [string]$ctype, [string]$cmd, [int]$exitCode, [string]$stdoutText, [string]$stderrText)
-    $historyPath = $script:errorHistoryFile
-    $needLearning = $false
-    $issueDesc = ""
-
-    if ($exitCode -ne 0 -and [string]::IsNullOrWhiteSpace($stderrText) -eq $false) {
-        $needLearning = $true
-        if ($stderrText -match "not recognized|not a cmdlet|unknown command") {
-            $issueDesc = "command_not_found_or_wrong_shell"
-        } elseif ($stderrText -match "access denied|permission denied") {
-            $issueDesc = "permission_denied"
-        } elseif ($stderrText -match "timeout|timed out") {
-            $issueDesc = "timeout"
-        } else {
-            $issueDesc = "exit_code_non_zero_with_stderr"
-        }
-    } elseif ($exitCode -eq 0 -and [string]::IsNullOrWhiteSpace($stdoutText)) {
-        $needLearning = $true
-        $issueDesc = "zero_exit_with_no_output"
-    } elseif ($exitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($stderrText)) {
-        $needLearning = $true
-        $issueDesc = "stderr_with_success_exit"
-    }
-
-    if (-not $needLearning) { return }
-
-    $entry = @{
-        cmd_id = $cid
-        timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
-        type = $ctype
-        command_summary = if ($cmd.Length -gt 120) { $cmd.Substring(0, 120) + "..." } else { $cmd }
-        exit_code = $exitCode
-        issue = $issueDesc
-        stderr_snippet = if ($stderrText.Length -gt 200) { $stderrText.Substring(0, 200) } else { $stderrText }
-        auto_detected = $true
-    }
-
-    try {
-        $existing = @{version="1.0"; errors=@()}
-        if (Test-Path $historyPath) {
-            $existingText = [System.IO.File]::ReadAllText($historyPath, $script:utf8)
-            if (-not [string]::IsNullOrWhiteSpace($existingText)) {
-                $existing = ($existingText | ConvertFrom-Json)
-            }
-        }
-        $existing.errors += $entry
-        $c = $existing.errors.Count
-        if ($c -gt 100) { $existing.errors = $existing.errors | Select-Object -Last 100 }
-        $existing.last_updated = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
-        $existing.total_errors_logged = $c
-        $json = ($existing | ConvertTo-Json -Depth 4 -Compress)
-        [System.IO.File]::WriteAllText($historyPath, $json, $script:utf8)
-        Log "[LEARN] Error logged: $cid -> $issueDesc"
-    } catch {
-        Log "[LEARN] Failed to log error: $_"
-    }
-}
+# (Error learning now handled by BridgeRules module — Log-ExecutionError)
 
 # ══════════════════════════════════════════════════════════════════
 # Startup cleanup + PID lock
@@ -256,10 +132,11 @@ function Get-ContentDedup { param([string]$CmdText) return $null }
 # ══════════════════════════════════════════════════════════════════
 # Inflight tracking — V21 concurrent command management
 # ══════════════════════════════════════════════════════════════════
-function Add-Inflight { param([string]$CmdId, $Worker, [string]$Ctype, [int]$Timeout)
+function Add-Inflight { param([string]$CmdId, $Worker, [string]$Ctype, [string]$Cmd, [int]$Timeout)
     $script:inflight[$CmdId] = @{
         worker = $Worker
-        type = $Ctype
+        ctype = $Ctype
+        cmd = $Cmd
         start = Get-Date
         timeout = $Timeout
     }
@@ -292,6 +169,16 @@ function Check-InflightResults {
             $content = Read-Json -path $rFile
             if ($content) {
                 Log "[$cid] INFLIGHT COMPLETE — exit=$($content.exit_code) dur=$($content.duration_ms)ms"
+                # Error learning via BridgeRules module
+                if ($content.exit_code -ne 0 -or -not [string]::IsNullOrWhiteSpace($content.stderr)) {
+                    try {
+                        Log-ExecutionError -CmdId $cid -Type $info.ctype -Command $info.cmd `
+                            -ExitCode $content.exit_code -StdoutText $content.stdout `
+                            -StderrText $content.stderr -DurationMs $content.duration_ms
+                    } catch {
+                        Log "[$cid] Error learning failed: $($_.Exception.Message)"
+                    }
+                }
                 $toRemove += $cid
                 $completed++
             }
@@ -457,6 +344,16 @@ function Invoke-Housekeeping {
     if ($Counter % 300 -eq 0) {
         Clean-HostLoopMode
         Assert-GuardianTask
+        # Rule engine: generate auto-rules from error history + prune stale rules
+        try {
+            $newRules = Generate-Rules
+            if ($newRules -and $newRules.Count -gt 0) {
+                Log "[HOUSEKEEP] Generated $($newRules.Count) auto-rules"
+            }
+            Update-Confidence
+        } catch {
+            Log "[HOUSEKEEP] Rule generation failed: $($_.Exception.Message)"
+        }
     }
 }
 
@@ -500,11 +397,7 @@ function Invoke-HandleDedup {
 function Invoke-ApplyRules {
     <#.SYNOPSIS Apply rule engine transformations to a command.#>
     param([string]$Cmd, [string]$Type, [string]$CmdId)
-    $ruleResult = if (Get-Command "Init-RuleEngine" -ErrorAction SilentlyContinue) {
-        Apply-Rules -Cmd $Cmd -Type $Type
-    } else {
-        @{cmd=(Legacy-ApplyRules -cmd $Cmd -ctype $Type); type=$Type; applied=@()}
-    }
+    $ruleResult = Apply-Rules -Cmd $Cmd -Type $Type
     if ($ruleResult.type -ne $Type) {
         Log "[$CmdId] TYPE CHANGED: $Type -> $($ruleResult.type)"
     }
@@ -602,7 +495,7 @@ function Invoke-UserContextExecution {
         if (Test-Path $userResult) {
             try {
                 $ur = Get-Content $userResult -Raw -Encoding UTF8 | ConvertFrom-Json
-                $userOut = $ur.o; $userErr = $ur.s; $userExit = $ur.e; $userError = $ur.err
+                $userOut = $ur.stdout; $userErr = $ur.stderr; $userExit = $ur.exit_code; $userError = $ur.error
             } catch { $userError = $_.Exception.Message }
             break
         }
@@ -843,7 +736,7 @@ while ($true) {
             $pipeDispatched = $false
             $worker = Dispatch-ToWorker -cid $cid -ctype $ctype -cmd $cmd -timeout $origTimeout
             if ($worker) {
-                Add-Inflight -CmdId $cid -Worker $worker -Ctype $ctype -Timeout $origTimeout
+                Add-Inflight -CmdId $cid -Worker $worker -Ctype $ctype -Cmd $cmd -Timeout $origTimeout
                 $pipeDispatched = $true
                 Reset-QueueToIdle -Path $script:queueFile
                 Log "[$cid] V22 ASYNC-DISPATCH to $($worker.id) — inflight"
@@ -860,3 +753,4 @@ while ($true) {
         Start-Sleep -Seconds 1
     }
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 

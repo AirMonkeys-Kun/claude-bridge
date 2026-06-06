@@ -88,3 +88,42 @@ claude-bridge/
 - `main.py` — 薄协调层
 
 新入口：`python run_v2.py`（旧 `server.py` 保留为备份）
+
+## 通信桥 V22 重构已完成 (2026-06-06)
+
+watcher.ps1 主循环已从 383 行内联代码重构为 9 个命名处理函数 + 模块引用。
+
+### 已完成的改动
+
+**1. 共享模块 (modules/)**
+- `BridgeCommon.psm1` — 13 个导出函数：Write-SafeFile, Read-SafeJson, Read-SafeText, Write-BridgeLog, Write-Heartbeat, Test-HeartbeatAlive, Enter-PidLock, Get-LockedPid, Reset-QueueToIdle, Get-IdleQueueJson, New-CommandResult, Write-CommandResult, Invoke-LogRotation
+- `BridgeExecution.psm1` — 4 个导出函数：Resolve-CommandType, Invoke-ScriptBlockFastPath, Invoke-Subprocess, Invoke-BridgeCommand
+
+**2. watcher.ps1 V22 重构**
+- 内联 Write-Text/Read-Json/Log 替换为模块导入 + 别名/包装
+- 主循环从 383 行缩减到 ~35 行，调用 9 个提取的命名函数：
+  - `Invoke-Housekeeping` — 周期清理（hostLoopMode + guardian）
+  - `Invoke-PollInflight` — 检查异步派发结果
+  - `Invoke-HandleDedup` — 内容哈希去重
+  - `Invoke-ApplyRules` — 规则引擎转换
+  - `Invoke-MetaCommand` — __BRIDGE_RESTART__/__BRIDGE_STOP__
+  - `Invoke-InlineExecution` — __INLINE__ 类型执行
+  - `Invoke-UserContextExecution` — user 类型路由
+  - `Invoke-InprocessFallback` — 进程内执行（ScriptBlock + 子进程）
+  - `Test-SelfUpgrade` — 自升级检测
+- 结果构建使用 `New-CommandResult` + `Write-CommandResult`
+- 队列重置使用 `Reset-QueueToIdle`
+
+**3. Git 状态**
+- commit `8179e5e` 已推送到 main
+- watcher V22 已部署并运行（通过 3 种路径验证：powershell dispatch, inline, cmd）
+
+### 仍需改进的问题（给下一轮）
+
+1. **queue.txt 文件锁** — 仍依赖 WriteAllText + 重试，存在竞争条件（多对话同时写）
+2. **两套 Worker 系统** — V21 typed workers + legacy _bridge workers 仍然并存
+3. **结果字段命名** — `_bridge/worker.ps1` 仍写 `e`/`o`/`s` 字段
+4. **BridgeExecution.psm1 未在 watcher 中完全使用** — Invoke-InprocessFallback 保留了原有 ScriptBlock+subprocess 代码（比模块的 Invoke-BridgeCommand 更激进，fast-path 对所有 powershell 类型生效），可后续统一
+5. **worker_generic.ps1 / worker_template.ps1** — 仍未引用共享模块，仍有重复代码
+6. **Legacy-ApplyRules** — 可以提取到独立的规则模块
+7. **Log-Error** — 可以提取到独立的学习模块

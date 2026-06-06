@@ -125,7 +125,7 @@ if ($DeployAll) {
 
     # Define deploy plan
     $deployPlan = @(
-        @{type="generic"; count=4},
+        @{type="generic"; count=6},
         @{type="file"; count=4},
         @{type="process"; count=2},
         @{type="system"; count=2},

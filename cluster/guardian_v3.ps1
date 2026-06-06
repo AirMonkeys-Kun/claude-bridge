@@ -18,86 +18,53 @@
 #>
 
 $ErrorActionPreference = "Continue"
-$utf8 = [System.Text.UTF8Encoding]::new($false)
 
 # ── Auto-detect paths ──
 $script:scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path  # cluster/
 $script:bridgeBase = Split-Path -Parent $scriptPath                   # D:\zebbingo\tools\claude-bridge
 $script:watcherDir = Join-Path $script:bridgeBase "watcher"
 $script:clusterDir = Join-Path $script:bridgeBase "cluster"
+$script:modulesDir = Join-Path $script:bridgeBase "modules"
 $script:poolFile = Join-Path $script:clusterDir ".worker_pool.json"
 $script:logFile = Join-Path $script:watcherDir "guardian_v3.log"
 $script:heartbeatFile = Join-Path $script:watcherDir ".watcher_heartbeat"
 $script:restartFlag = Join-Path $script:watcherDir ".graceful_restart"
 $script:lockFile = Join-Path $script:watcherDir ".watcher.lock"
 $script:queueFile = Join-Path $script:watcherDir "queue.txt"
-$script:idleQueue = '{"state":"idle","cmd_id":"","command":"","type":""}'
+$script:agentScript = Join-Path $script:bridgeBase "bridge_agent.py"
+$script:agentPort = 19850
+
+# ── Module imports (BridgeCommon) ──
+Import-Module (Join-Path $script:modulesDir "BridgeCommon.psm1") -Force
+$script:utf8 = [System.Text.UTF8Encoding]::new($false)
+
+# ── Wrapper + aliases for backward compatibility ──
+function Log { param([string]$m)
+    $t = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+    Write-Host "$t | [GUARDIAN] $m"
+    try {
+        Write-BridgeLog -Message "[GUARDIAN] $m" -LogFile $script:logFile
+        if ($script:guardianRunCount % 50 -eq 0) { Invoke-LogRotation -Path $script:logFile -MaxLines 500 }
+    } catch { }
+}
+Set-Alias Write-Text  Write-SafeFile
+Set-Alias Read-Json   Read-SafeJson
+function Read-Text { param([string]$path) Read-SafeText -Path $path }
 
 $script:heartbeatStaleSeconds = 120
 $script:guardianRunCount = 0
 $script:lastWorkerDeployTime = $null  # tracks when workers were last deployed (avoids false startup alerts)
-$script:logMaxLines = 500  # max lines before log rotation
+# log rotation handled by Invoke-LogRotation from BridgeCommon (500 lines)
 
 # ── Worker type definitions (matching worker_factory.ps1) ──
 $script:workerTypes = @(
-    @{type="generic"; count=4},
+    @{type="generic"; count=6},
     @{type="file";    count=4},
     @{type="process"; count=2},
     @{type="system";  count=2},
     @{type="wsl";     count=1},
     @{type="user";    count=1}
 )
-
-# ============================================================
-# Helpers
-# ============================================================
-
-function Write-Text { param([string]$path, [string]$content)
-    $retries = 3
-    for ($i = 0; $i -lt $retries; $i++) {
-        try { [System.IO.File]::WriteAllText($path, $content, $utf8); return }
-        catch { if ($i -eq $retries -1) { throw }; Start-Sleep -Milliseconds 100 }
-    }
-}
-
-function Read-Text { param([string]$path)
-    if (-not (Test-Path $path)) { return $null }
-    $retries = 3
-    for ($i = 0; $i -lt $retries; $i++) {
-        try { return [System.IO.File]::ReadAllText($path, $utf8).Trim() }
-        catch { if ($i -eq $retries -1) { return $null }; Start-Sleep -Milliseconds 100 }
-    }
-}
-
-function Read-Json { param([string]$path)
-    $t = Read-Text $path
-    if (-not $t) { return $null }
-    try { return ($t | ConvertFrom-Json) } catch { return $null }
-}
-
-function Rotate-Log {
-    try {
-        if (Test-Path $script:logFile) {
-            $lines = [System.IO.File]::ReadAllLines($script:logFile, $utf8)
-            if ($lines.Count -gt $script:logMaxLines) {
-                $keep = $lines[-$script:logMaxLines..-1]
-                [System.IO.File]::WriteAllLines($script:logFile, $keep, $utf8)
-            }
-        }
-    } catch { }
-}
-
-function Log { param([string]$m)
-    try {
-        $t = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
-        Write-Host "$t | [GUARDIAN] $m"
-        [System.IO.File]::AppendAllText($script:logFile, "$t | [GUARDIAN] $m`r`n", $utf8)
-        # Rotate every ~50 calls to keep log manageable
-        if ($script:guardianRunCount % 50 -eq 0) { Rotate-Log }
-    } catch {
-        # Silent fallback
-    }
-}
 
 # ============================================================
 # State Checks
@@ -254,7 +221,7 @@ function Invoke-CleanArtifacts {
     Log "  Cleaned watcher result files"
 
     # Reset queue
-    Write-Text -path $script:queueFile -content $script:idleQueue
+    Write-Text -path $script:queueFile -content (Get-IdleQueueJson)
     Log "  Queue reset to idle"
 
     # Worker artifacts
@@ -267,7 +234,7 @@ function Invoke-CleanArtifacts {
                 if (Test-Path $path) { Remove-Item $path -Force }
             }
             $wq = Join-Path $wDir "queue.txt"
-            if (Test-Path $wq) { Write-Text -path $wq -content $script:idleQueue }
+            if (Test-Path $wq) { Write-Text -path $wq -content (Get-IdleQueueJson) }
         }
         Log "  Cleaned $($pool.workers.Count) worker directories"
     }
@@ -382,7 +349,7 @@ function Invoke-StartWorkers {
     return $allOk
 }
 
-function Invoke-RespwanDeadWorkers {
+function Invoke-RespawnDeadWorkers {
     param([int]$MaxDeadBeforeRespawn = 2)
 
     $status = Get-WorkerPoolStatus
@@ -463,7 +430,7 @@ function Invoke-GuardianCheck {
             $ws = Get-WorkerPoolStatus
             if ($ws.dead -ge $ws.total -or $ws.total -eq 0) {
                 Log "  Workers also dead — respawning"
-                Invoke-RespwanDeadWorkers
+                Invoke-RespawnDeadWorkers
             }
         }
         return
@@ -487,10 +454,48 @@ function Invoke-GuardianCheck {
     $ws = Get-WorkerPoolStatus
     Log "Worker pool: $($ws.alive)/$($ws.total) alive"
     if ($ws.dead -gt 0) {
-        Invoke-RespwanDeadWorkers
+        Invoke-RespawnDeadWorkers
     }
 
-    # ── Step 5: Check proxy (localhost:4000) health ──
+    # ── Step 5: Check bridge_agent (TCP :19850) health ──
+    $agentAlive = $false
+    try {
+        $agentCheck = Get-NetTCPConnection -LocalPort $script:agentPort -State Listen -ErrorAction SilentlyContinue
+        if ($agentCheck) {
+            $agentAlive = $true
+            Log "BridgeAgent: alive (port $($script:agentPort) listening, pid=$($agentCheck.OwningProcess))"
+        }
+    } catch { }
+
+    if (-not $agentAlive -and (Test-Path $script:agentScript)) {
+        Log "BridgeAgent: DOWN — port $($script:agentPort) not listening, restarting..."
+        try {
+            $aPsi = New-Object System.Diagnostics.ProcessStartInfo
+            $aPsi.FileName = "python.exe"
+            $aPsi.Arguments = "`"$script:agentScript`""
+            $aPsi.UseShellExecute = $false
+            $aPsi.CreateNoWindow = $true
+            $aPsi.RedirectStandardOutput = $true
+            $aPsi.RedirectStandardError = $true
+            $agentProc = [System.Diagnostics.Process]::Start($aPsi)
+            if ($agentProc) {
+                Log "  Launched bridge_agent PID=$($agentProc.Id)"
+                Start-Sleep -Seconds 2
+                $verify = Get-NetTCPConnection -LocalPort $script:agentPort -State Listen -ErrorAction SilentlyContinue
+                if ($verify) {
+                    Log "  BridgeAgent restarted OK (pid=$($verify.OwningProcess))"
+                } else {
+                    Log "  WARNING: BridgeAgent still not listening after restart"
+                }
+            }
+        } catch {
+            Log "  ERROR restarting bridge_agent: $($_.Exception.Message)"
+        }
+    } elseif (-not $agentAlive) {
+        Log "BridgeAgent: DOWN but script not found at $script:agentScript — skipping"
+    }
+
+    # ── Step 6: Check proxy (localhost:4000) health ──
     $proxyAlive = $false
     try {
         $portCheck = Get-NetTCPConnection -LocalPort 4000 -State Listen -ErrorAction SilentlyContinue

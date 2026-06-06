@@ -1,6 +1,6 @@
 # 双桥架构 — 代理桥 + 通信桥
 
-> 最后更新：2026-06-06 | 版本：V1.3
+> 最后更新：2026-06-06 | 版本：V1.4
 
 ---
 
@@ -75,15 +75,15 @@ Linux VM (Cowork Sandbox)
 │             │                          │                            │
 │     ┌───────▼───────┐          ┌───────▼───────┐                    │
 │     │   代理桥       │          │   通信桥       │                    │
-│     │ via tap0      │          │ TCP + 文件    │                    │
-│     │ V13 server.py │          │ watcher V2.2  │                    │
+│     │ via tap0      │          │ TCP → Pipe    │                    │
+│     │ V13 server.py │          │ bridge_agent  │                    │
 │     └───────┬───────┘          └───────┬───────┘                    │
 │             │                          │                            │
 └─────────────┼──────────────────────────┼────────────────────────────┘
-              │ HTTP via tap0            │ TCP (0.8ms) + queue.txt
+              │ HTTP via tap0            │ TCP (0.8ms) → Named Pipe
               ▼                          ▼
     ┌──────────────────┐      ┌─────────────────────┐
-    │  xiaomi (mimo)    │      │  Worker Pool         │
+    │  xiaomi (mimo)    │      │  Worker Pool (13)    │
     │  Anthropic 格式   │      │  process/file/system  │
     │  adaptive think   │      │  PowerShell 执行      │
     ├──────────────────┤      └─────────────────────┘
@@ -148,25 +148,28 @@ server.py (1970 行) 功能完善，代码质量整体可控：
 ## 通信桥 (Communication Bridge)
 
 **位置：** `D:\zebbingo\tools\claude-bridge\`
-**核心：** watcher.ps1 V2.2 + worker_factory.ps1 V2.2
-**协议：** queue.txt 文件 IPC + Named Pipe 分发 (当前) / TCP (规划中)
+**核心：** bridge_agent.py (Phase 3) + watcher.ps1 V2.2 + worker_factory.ps1 V2.2
+**协议：** TCP → Named Pipe 直接分发 (主通道) + queue.txt fallback
 
 ### 核心能力
 
 | 能力 | 说明 |
 |------|------|
-| 文件 IPC | Claude 写 queue.txt → watcher 轮询检测 → 分发执行 |
-| Named Pipe 直连 | worker 结果通过 pipe 直接返回，绕过 9P 缓存延迟 |
-| 异步分发 | V21 async dispatch，支持多命令并发 |
-| Worker Pool | 按类型 (process/file/system/wsl/user) × 数量管理 |
+| TCP 入口 | bridge_agent.py 监听 :19850，沙箱通过 bridge_client.py 直连 |
+| Named Pipe 直连 | bridge_agent 直接 CallNamedPipe 到 worker，跳过 queue.txt + FSW |
+| 文件 Fallback | TCP 不可用时自动回退 queue.txt 文件桥 |
+| 异步分发 | 支持多客户端并发，每连接独立线程 |
+| Worker Pool | 按类型 (process/file/system/wsl/user) × 数量管理，自动检测存活 |
 | 自愈体系 | Guardian v3 监控 watcher，自动重启 + 自升级 |
 | 规则引擎 | YAML 驱动的命令变换、学习、统计 |
 
-### 性能特征 (2026-06-05 实测)
+### 性能特征 (2026-06-06 实测)
 
-| 指标 | 数值 |
-|------|------|
-| Echo 命令 round-trip | 161-209ms |
+| 指标 | 旧方案 (queue.txt) | 新方案 (TCP + Pipe) | 改善 |
+|------|---------------------|---------------------|------|
+| Echo round-trip avg | 195ms | **18ms** | **10.5x** |
+| Echo round-trip p50 | 204ms | **15ms** | **13.6x** |
+| Echo round-trip p99 | 211ms | **44ms** | **4.8x** |
 | 脚本执行 (bridge_test.ps1) | 1443ms (8 项测试) |
 | PowerShell 启动 | ~1ms |
 | 文件读写 100 行 | 13ms |
@@ -299,3 +302,4 @@ curl http://127.0.0.1:4000/admin/status
 | 2026-06-05 | V1.1 | 新增 bridge_wait.py 结果等待方式（100ms 轮询替代固定 sleep）；新增代理 vs 直连 A/B 对比基准数据 |
 | 2026-06-05 | V1.2 | 新增 V13+ 精细化运营：429 熔断降级、thinking display 透传、OpenAI 路径 thinking 修复、`/admin/provider` 一键热切换、STREAM_TIMING 粒度化日志、TUN 模式排查 |
 | 2026-06-06 | V1.3 | **沙箱架构升级**：更新架构图反映 tap0 网络（`--unshare-net` 已移除），新增跨 VM 延迟基准数据，新增 TCP 迁移路线图和 `TCP-MIGRATION-PLAN.md` 引用，新增两桥代码质量评估 |
+| 2026-06-06 | V1.4 | **Phase 3 部署完成**：bridge_agent.py Named Pipe 直接分发上线，echo round-trip 从 195ms → 18ms（10.5x 加速），更新架构图和性能基准，修复 Windows UTF-8 BOM 解析和 PID 检测兼容性 |

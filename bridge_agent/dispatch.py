@@ -164,7 +164,8 @@ def execute_command(cmd):
     cmd_type = cmd["type"]
     timeout = cmd.get("timeout", 30)
 
-    # Phase 3: try Named Pipe dispatch with retries
+    # Phase 3: try Named Pipe dispatch with exponential backoff
+    # (Phase 4 Step 2: fixed delay → exponential backoff)
     for attempt in range(PIPE_RETRY_ATTEMPTS):
         worker = dispatch_via_pipe(cmd_id, command, cmd_type, timeout)
         if worker:
@@ -172,7 +173,8 @@ def execute_command(cmd):
             result = wait_for_result(cmd_id, timeout)
             return result, "pipe"
         if attempt < PIPE_RETRY_ATTEMPTS - 1:
-            time.sleep(PIPE_RETRY_DELAY)
+            backoff = PIPE_RETRY_DELAY * (2 ** attempt)  # exponential: 50ms, 100ms, 200ms
+            time.sleep(backoff)
 
     # Phase 1 fallback: queue.txt (serialized write + wait)
     log(f"  [{cmd_id}] via=queue: {command[:60]}...")
@@ -200,7 +202,4 @@ def execute_command(cmd):
 def _read_result(path):
     """Read a result JSON file."""
     try:
-        with open(path, "r", encoding="utf-8-sig") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return None
+        with open(

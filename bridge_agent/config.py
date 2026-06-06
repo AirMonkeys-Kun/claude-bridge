@@ -24,6 +24,9 @@ QUEUE_WRITE_RETRIES = 3
 QUEUE_WRITE_BACKOFF = 0.1
 MAX_CONCURRENT = 5
 
+# ── Thread pool ──────────────────────────────────────────────────────────
+THREAD_POOL_SIZE = 10         # max concurrent client handler threads
+
 # ── Pipe dispatch ──────────────────────────────────────────────────────
 PIPE_RETRY_ATTEMPTS = 3       # retry pipe dispatch before falling to queue
 PIPE_RETRY_DELAY = 0.05       # 50ms between retries
@@ -36,10 +39,4 @@ TYPE_MAP = {
     "process": "process", "system": "system",
 }
 
-# ── Shared state ───────────────────────────────────────────────────────
-queue_serial = threading.Lock()       # serializes queue.txt commands
-active_connections = 0
-active_lock = threading.Lock()
-_worker_pool = None
-_pool_load_time = 0
-_pool_lock = threading.Lock()
+# ── Watchdog ────────────────────────────────�

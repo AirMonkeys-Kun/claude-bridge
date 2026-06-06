@@ -8,6 +8,7 @@ import uuid
 from .config import (
     POLL_INTERVAL, QUEUE_WRITE_RETRIES, QUEUE_WRITE_BACKOFF,
     PIPE_RETRY_ATTEMPTS, PIPE_RETRY_DELAY, PIPE_RESPONSE_BUFFER,
+    PIPE_TIMEOUT_MS,
     QUEUE_FILE, RESULT_DIR, queue_serial,
 )
 from .pool import find_all_workers
@@ -98,7 +99,7 @@ def _pipe_win32(pipe_name, cmd_json, cmd_id, worker):
         win32pipe.CallNamedPipe(
             f"\\\\.\\pipe\\{pipe_name}",
             (cmd_json + "\n").encode("utf-8"),
-            PIPE_RESPONSE_BUFFER, 0,
+            PIPE_RESPONSE_BUFFER, PIPE_TIMEOUT_MS,
         )
         log(f"  [{cmd_id}] PIPE -> {worker['id']} OK")
         return True

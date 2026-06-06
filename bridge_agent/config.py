@@ -28,6 +28,7 @@ MAX_CONCURRENT = 5
 PIPE_RETRY_ATTEMPTS = 3       # retry pipe dispatch before falling to queue
 PIPE_RETRY_DELAY = 0.05       # 50ms between retries
 PIPE_RESPONSE_BUFFER = 4096   # max response bytes from Named Pipe
+PIPE_TIMEOUT_MS = 150         # ms to wait for CallNamedPipe (0=instant, may skip busy workers)
 
 # ── Worker type mapping ────────────────────────────────────────────────
 TYPE_MAP = {

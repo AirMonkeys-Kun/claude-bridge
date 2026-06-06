@@ -96,7 +96,7 @@
                                   "to_type":  "cmd",
                                   "description":  "含 \u0026\u0026 的命令改为 cmd 类型执行"
                               },
-                      "hits":  2,
+                      "hits":  4,
                       "created":  "2026-06-03",
                       "example_before":  "type=powershell, command=cd dir \u0026\u0026 python main.py",
                       "example_after":  "type=cmd, command=cd dir \u0026\u0026 python main.py"
@@ -216,7 +216,7 @@
                                   "find":  "|",
                                   "replace_with":  "^|"
                               },
-                      "hits":  22,
+                      "hits":  23,
                       "created":  "2026-06-04",
                       "example_before":  "echo hello | findstr hello",
                       "example_after":  "echo hello ^| findstr hello"
@@ -277,9 +277,9 @@
                                   "find":  "\u0026\u0026"
                               },
                       "created":  "2026-06-03 21:24:14.421",
-                      "hits":  0
+                      "hits":  2
                   }
               ],
     "version":  "2.0",
-    "last_updated":  "2026-06-06 18:31:11.816"
+    "last_updated":  "2026-06-06 21:56:54.931"
 }

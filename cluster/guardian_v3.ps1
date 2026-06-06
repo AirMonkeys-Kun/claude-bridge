@@ -490,6 +490,39 @@ function Invoke-GuardianCheck {
         Invoke-RespwanDeadWorkers
     }
 
+    # ── Step 5: Check proxy (localhost:4000) health ──
+    $proxyAlive = $false
+    try {
+        $portCheck = Get-NetTCPConnection -LocalPort 4000 -State Listen -ErrorAction SilentlyContinue
+        if ($portCheck) {
+            $proxyAlive = $true
+            Log "Proxy: alive (port 4000 listening, pid=$($portCheck.OwningProcess))"
+        }
+    } catch { }
+
+    if (-not $proxyAlive) {
+        Log "Proxy: DOWN — port 4000 not listening, restarting..."
+        $restartScript = Join-Path $script:watcherDir "restart_proxy.ps1"
+        if (Test-Path $restartScript) {
+            try {
+                $result = & powershell -ExecutionPolicy Bypass -File $restartScript 2>&1
+                Log "  Restart result: $result"
+                # Verify restart
+                Start-Sleep -Seconds 2
+                $verify = Get-NetTCPConnection -LocalPort 4000 -State Listen -ErrorAction SilentlyContinue
+                if ($verify) {
+                    Log "  Proxy restarted OK (pid=$($verify.OwningProcess))"
+                } else {
+                    Log "  WARNING: Proxy still not listening after restart"
+                }
+            } catch {
+                Log "  ERROR restarting proxy: $($_.Exception.Message)"
+            }
+        } else {
+            Log "  WARNING: restart_proxy.ps1 not found at $restartScript"
+        }
+    }
+
     Log "=== Guardian check #$($script:guardianRunCount) complete ==="
 }
 

@@ -571,3 +571,208 @@ V2.2 新增四项 guardian 保护机制：
 | 9 | start_watcher_only.ps1 | ✅ 通过 | .NET Process.Start 启动 watcher 成功，心跳 15s 内稳定 |
 
 **结论**: V2.2 所有修复已部署并验证。系统 3 层自愈体系完整运行。watcher.ps1 损坏已修复，file_1 已加入 pool，guardian 使用 .NET Process.Start。
+
+---
+
+## 代理桥演进 — V6 到 V13+ (2026-06-05)
+
+> 通信桥和代理桥并行发展。通信桥从 V1 演进到 V2.2（上文已记录），
+> 代理桥从 V6 演进到 V13+。以下记录代理桥的完整发展脉络。
+
+### V6 — 最初的可工作代理
+
+**日期**：2026-06-03（存档于 `proxy/v6/server_v6.py`）
+
+**承诺**：一个简单的 Anthropic → OpenAI 转换代理，让 Claude Desktop 通过第三方后端工作。
+
+**架构**：
+```
+Claude Desktop → localhost:4000 → server.py (格式转换) → 后端 API
+```
+
+**能力**：
+- Anthropic Messages API 接收
+- 转换为 OpenAI Chat Completions 格式
+- 转发到后端，转换响应回来
+- 基本错误处理
+
+**局限**：
+- 无 thinking 块处理
+- 无 failover / 熔断器
+- 无配置热更新
+- 所有 provider 走 OpenAI 转换路径
+- 无流式 SSE 优化
+- GZipMiddleware 压缩 SSE 流（增加延迟）
+
+**回归验证状态**：📦 已存档，不再维护
+
+### V7-V10 — 渐进式增强
+
+**日期**：2026-06-03 ~ 2026-06-04
+
+**逐步添加**：
+- V7：多 provider 配置 + 基础 failover
+- V8：config.yaml 配置文件 + 热重载
+- V10：规则引擎集成 + 模型路由
+
+**回归验证状态**：已被 V13 完全取代
+
+### V13 — 生产级重写
+
+**日期**：2026-06-05
+
+**承诺**：完整重写，生产级质量。双 API 格式 + adaptive thinking + SSE 优化。
+
+**核心架构决策**：
+
+| 决策 | 原因 |
+|------|------|
+| 双 API 格式 | xiaomi 用 Anthropic 原生（性能更好），zhipu 用 OpenAI 转换（兼容性） |
+| adaptive thinking 透传 | 模型自行决定思考深度，不强制固定 budget |
+| SSE 零拷贝转发 | 未修改事件跳过 JSON 重序列化，降低流式延迟 |
+| 浅层 sort_keys | 递归排序大 payload 浪费 CPU，浅层排序足够 |
+| 移除 GZipMiddleware | localhost 不需要压缩，SSE 流压缩反而增加延迟 |
+
+**五大历史 Bug（全部修复）**：
+
+1. **httpx 流式失败** — `async with resp:` 触发 AttributeError，httpx 0.28.1 无 `__aenter__`。改用 `send(stream=True)` + `aclose()`
+2. **Thinking budget 硬编码** — `_normalize_thinking()` 将 `adaptive` 强制转为 `enabled` + 固定 10240。改为 Anthropic 格式原生透传
+3. **SSE 压缩开销** — GZipMiddleware 全局包裹 SSE 流。直接移除
+4. **JSON 双重序列化** — 每个事件 `json.loads()` → 处理 → `json.dumps()`。新增 `_sse_raw()` 跳过未修改事件
+5. **Payload CPU 浪费** — `sort_keys()` 递归排序。改为 `dict(sorted(payload.items()))` 浅层排序
+
+**回归验证状态**：✅ 全部通过（见下方 V13+ 基准测试）
+
+### V13+ — 精细化运营 (2026-06-05 下午)
+
+**背景**：V13 稳定运行后，用户发现 latency 波动（CONNECT 1-4 秒），以及"Writing file..."等操作时长时间无反馈。开始做深入诊断和精细化优化。
+
+#### 改动 1：粒度化时序日志 (STREAM_TIMING)
+
+**问题**：无法区分 thinking 时间是真实模型思考还是网络延迟。
+
+**新增日志格式**：
+```
+STREAM_TIMING total=26797ms | req→first_think=8469ms think_dur=16250ms 
+think→content=16ms content_dur=1218ms | tok: thinking=595 content=7 
+| think_events=30 max_think_gap=250ms | stop=tool_use
+```
+
+**验证**：thinking_delta 间隔中位数 62-75ms，最大间隔 <300ms → 确认是真实模型思考，非网络延迟。
+
+#### 改动 2：429 自动熔断降级
+
+**问题**：xiaomi 欠费返回 429（quota exhausted），代理将其作为普通 4xx 直接丢回客户端，**不触发 failover**。所有请求都卡在 xiaomi 上重试，zhipu 从未被尝试。
+
+**修复**：
+```python
+# 原先：4xx 全部直接返回客户端
+if status < 500:
+    return _error_response(...)
+
+# 现在：429 单独处理，触发 failover
+if status == 429:
+    cb.record_failure()
+    continue  # 尝试下一个 provider
+```
+
+#### 改动 3：Thinking `display` 字段透传
+
+**问题**：`_normalize_thinking()` 将 `adaptive → enabled` 时丢弃了 `display` 字段。Anthropic API 支持 `display: "summarized"`（显示思考）和 `display: "omitted"`（隐藏思考）。
+
+**修复**：
+```python
+normalized = {"type": "enabled", "budget_tokens": budget}
+if thinking.get("display"):
+    normalized["display"] = thinking["display"]
+```
+
+#### 改动 4：OpenAI 路径 thinking 配置丢失
+
+**问题**：`_anthropic_to_openai()` 调用 `_normalize_thinking()` 后，thinking 配置**根本没有放进 OpenAI payload**。走 zhipu/GLM 时 thinking 参数完全被丢弃。
+
+**修复**：
+```python
+if body.get("thinking"):
+    oai_payload["thinking"] = body["thinking"]
+```
+
+#### 改动 5：一键热切换管理接口
+
+**问题**：切换 provider 需要手动编辑 config.yaml 中的 `provider` 字段和所有路由规则。容易遗漏（路由规则优先级高于默认 provider）。
+
+**新增接口**：
+
+| 端点 | 功能 |
+|------|------|
+| `POST /admin/provider` | 一键切换：`{"provider": "zhipu"}` |
+| `GET /admin/status` | 查看当前状态 |
+
+**特性**：
+- 即时生效（内存中更新）
+- 持久化到 config.yaml（重启不丢）
+- 自动更新所有路由规则
+- 重置目标 provider 的熔断器（确保新 provider 干净启动）
+- 提供快捷脚本 `watcher/switch_provider.py`
+
+#### 改动 6：THINKING_CONFIG 诊断日志
+
+**新增**：请求入口处打印 Claude Desktop 实际发送的 thinking 参数：
+```
+THINKING_CONFIG from client: {"type":"adaptive"}
+```
+
+**验证结果**：Claude Desktop 发送 `thinking: {"type": "adaptive"}`，不包含 `display` 字段。显示行为由后端模型默认值决定。
+
+### V13+ 基准测试 (GLM/zhipu 路径, 2026-06-05)
+
+代理切换到 zhipu/GLM 后的实际运行日志：
+
+```
+Route model claude-sonnet-4-6 -> provider 'zhipu' (first in chain)
+[zhipu] openai claude-sonnet-4-6 -> glm-5.1  msgs=276 stream=True tools=55
+Normalizing thinking: adaptive -> enabled budget=10240
+HTTP Request: POST https://open.bigmodel.cn/api/coding/paas/v4/chat/completions "HTTP/1.1 200 OK"
+OpenAI stream done: stop=tool_use text=True reasoning=63 tools=1 in=82933 out=73
+```
+
+**关键观察**：
+- GLM 路径正常工作，reasoning tokens 正常产生
+- Thinking 配置正确透传（adaptive → enabled）
+- 路由规则正确（所有模型 → zhipu）
+- 熔断器正常（xiaomi 429 后自动降级）
+
+### TUN 模式排查
+
+**发现**：系统运行 Clash Verge 代理，TUN 模式拦截所有流量（包括 localhost → 后端）。`198.18.0.x` 是 Clash TUN 的虚拟 DNS IP。
+
+**解决**：关闭 Clash TUN 模式和 DNS 覆写，tracert 确认流量走真实网络路径。
+
+### 代理桥关键文件
+
+| 文件 | 路径 | 说明 |
+|------|------|------|
+| server.py | `proxy/server.py` | 主服务，1860 行 |
+| config.yaml | `proxy/config.yaml` | 提供商/路由/熔断配置 |
+| .env | `proxy/.env` | API Key 环境变量 |
+| switch_provider.py | `watcher/switch_provider.py` | 一键切换脚本 |
+| restart.ps1 | `proxy/restart.ps1` | 重启脚本 |
+| proxy_debug.log | `proxy/proxy_debug.log` | 详细调试日志 |
+| proxy_audit.log | `proxy/proxy_audit.log` | 结构化审计日志 |
+
+### 代理桥完整修复清单
+
+| # | 问题 | 修复 | 状态 |
+|---|------|------|------|
+| 1 | httpx `__aenter__` 不存在 | `send(stream=True)` + `aclose()` | ✅ |
+| 2 | adaptive thinking 强制固定 budget | Anthropic 格式原生透传 | ✅ |
+| 3 | GZipMiddleware 压缩 SSE 流 | 移除中间件 | ✅ |
+| 4 | JSON 双重序列化 | `_sse_raw()` 零拷贝转发 | ✅ |
+| 5 | sort_keys 递归 CPU 浪费 | 浅层排序 | ✅ |
+| 6 | 无时序诊断数据 | STREAM_TIMING + max_think_gap | ✅ |
+| 7 | 429 不触发 failover | 单独处理 429 为熔断错误 | ✅ |
+| 8 | thinking display 字段丢失 | 保留 display 透传 | ✅ |
+| 9 | OpenAI 路径 thinking 丢失 | 加入 oai_payload | ✅ |
+| 10 | 切换 provider 需手动编辑 | `/admin/provider` 管理接口 | ✅ |
+| 11 | Clash TUN 拦截流量 | 关闭 TUN + DNS 覆写 | ✅ |
+| 12 | 路由规则覆盖默认 provider | 管理接口自动更新路由 | ✅ |

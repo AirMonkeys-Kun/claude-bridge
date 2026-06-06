@@ -1,0 +1,5 @@
+[
+  {"cmd_id": "bt2_1", "command": "echo batch2_test1", "type": "process", "timeout": 10},
+  {"cmd_id": "bt2_2", "command": "echo batch2_test2", "type": "process", "timeout": 10},
+  {"cmd_id": "bt2_3", "command": "echo batch2_test3", "type": "process", "timeout": 10}
+]

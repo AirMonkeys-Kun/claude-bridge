@@ -1,0 +1,5 @@
+[
+  {"cmd_id": "bt_1", "command": "echo batch_test_1", "type": "process", "timeout": 10},
+  {"cmd_id": "bt_2", "command": "Get-Date -Format HH:mm:ss.fff", "type": "powershell", "timeout": 10},
+  {"cmd_id": "bt_3", "command": "python3 -c \"import math; print(math.pi * 100)\"", "type": "process", "timeout": 10}
+]

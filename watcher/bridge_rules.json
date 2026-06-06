@@ -182,7 +182,7 @@
                                   "to_type":  "powershell",
                                   "description":  "含 python 的命令改用 powershell 类型执行，避免 GBK 编码问题"
                               },
-                      "hits":  2,
+                      "hits":  3,
                       "created":  "2026-06-04",
                       "example_before":  "type=cmd, command=python script.py",
                       "example_after":  "type=powershell, command=python script.py"
@@ -216,7 +216,7 @@
                                   "find":  "|",
                                   "replace_with":  "^|"
                               },
-                      "hits":  15,
+                      "hits":  22,
                       "created":  "2026-06-04",
                       "example_before":  "echo hello | findstr hello",
                       "example_after":  "echo hello ^| findstr hello"
@@ -281,5 +281,5 @@
                   }
               ],
     "version":  "2.0",
-    "last_updated":  "2026-06-05 10:16:17.513"
+    "last_updated":  "2026-06-05 23:27:54.574"
 }

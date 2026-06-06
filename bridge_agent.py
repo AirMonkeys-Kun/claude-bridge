@@ -26,7 +26,9 @@ Protocol:
 import json
 import os
 import socket
+import subprocess
 import sys
+import threading
 import time
 
 from bridge_agent.config import (
@@ -131,9 +133,84 @@ def handle_client(conn, addr):
 
 # ── Main ───────────────────────────────────────────────────────────────
 
-def main():
-    import threading
+# ── Watcher watchdog (Gap 1: outermost self-healing layer) ─────────────
 
+def _watcher_watchdog():
+    """Background thread: checks watcher heartbeat every 60s.
+
+    This restores the original Guardian design intent (external watchdog recovering
+    the watcher from deadlock/crash) but uses the bridge_agent Python process instead
+    of a Scheduled Task. Python is deliberately chosen: it is more resilient than
+    PowerShell (no PS host crashes, no S4U token issues).
+
+    Logic mirrors guardian_v3.ps1 Layer 1 but without the destructive
+    kill-all-bridge-processes step — the restarter handles clean handoff.
+    """
+    hb_file = WATCHER_DIR / ".watcher_heartbeat"
+    lock_file = WATCHER_DIR / ".watcher.lock"
+    restarter = WATCHER_DIR / "restarter.ps1"
+    watcher_ps1 = WATCHER_DIR / "watcher.ps1"
+    DEFAULT_STALE_SECONDS = 120
+    CHECK_INTERVAL = 60
+
+    while True:
+        time.sleep(CHECK_INTERVAL)
+        try:
+            # 1. Check heartbeat staleness
+            stale = True
+            try:
+                mtime = os.path.getmtime(hb_file)
+                if (time.time() - mtime) < DEFAULT_STALE_SECONDS:
+                    stale = False
+            except OSError:
+                pass  # heartbeat file missing → definitely stale
+
+            if not stale:
+                continue
+
+            log("[WATCHDOG] Watcher heartbeat stale — initiating restart")
+
+            # 2. Remove lock file (crashed watcher holds it)
+            try:
+                if lock_file.exists():
+                    lock_file.unlink()
+                    log("  Removed stale .watcher.lock")
+            except OSError as e:
+                log(f"  Could not remove lock: {e}")
+
+            # 3. Launch restarter (OldPID=0 → skip wait, just start new watcher)
+            if not restarter.exists():
+                log(f"  restarter.ps1 not found — trying watcher.ps1 directly")
+                # Fallback: launch watcher directly
+                if watcher_ps1.exists():
+                    try:
+                        subprocess.Popen(
+                            ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                             "-File", str(watcher_ps1)],
+                            creationflags=subprocess.CREATE_NO_WINDOW
+                        )
+                        log("  Launched watcher.ps1 directly")
+                    except Exception as e:
+                        log(f"  Failed to launch watcher.ps1: {e}")
+                continue
+
+            try:
+                proc = subprocess.Popen(
+                    ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                     "-File", str(restarter),
+                     "-OldPID", "0",
+                     "-WatcherPath", str(watcher_ps1)],
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+                log(f"  Launched restarter PID={proc.pid}")
+            except Exception as e:
+                log(f"  Failed to launch restarter: {e}")
+
+        except Exception as e:
+            log(f"[WATCHDOG] Error in watchdog loop: {e}")
+
+
+def main():
     port = int(os.environ.get("BRIDGE_PORT", DEFAULT_PORT))
 
     if not WATCHER_DIR.exists():
@@ -160,6 +237,11 @@ def main():
     log(f"  Max clients:   {MAX_CONCURRENT}")
 
     reset_queue()
+
+    # Start watcher watchdog thread (outermost self-healing layer)
+    watchdog = threading.Thread(target=_watcher_watchdog, daemon=True, name="watchdog")
+    watchdog.start()
+    log(f"  Watcher watchdog:   active (check every {60}s, stale after {120}s)")
 
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

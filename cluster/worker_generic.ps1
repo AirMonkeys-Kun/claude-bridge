@@ -235,11 +235,11 @@ $null = $pipePs.AddScript({
 
             # Write result to file (backward compatibility)
             $resPath = Join-Path $resultD "r_${cid}.json"
-            WF $resPath ($res | ConvertTo-Json -Compress)
+            WF $resPath ($res | ConvertTo-Json -Depth 2 -Compress)
 
             # Return result through pipe
             $pipeResult = @{
-                status = $res.state
+                state = $res.state
                 cmd_id = $cid
                 exit_code = $exitCode
                 stdout = $stdout
@@ -248,8 +248,9 @@ $null = $pipePs.AddScript({
                 duration_ms = $elapsed
                 fast_path = $fastPath
                 pipe_direct = $true
+                timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
             }
-            $pipeJson = $pipeResult | ConvertTo-Json -Compress
+            $pipeJson = $pipeResult | ConvertTo-Json -Depth 2 -Compress
             $writer.WriteLine($pipeJson)
 
             # Reset queue to idle

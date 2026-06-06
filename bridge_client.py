@@ -232,4 +232,22 @@ def main():
         cmd = json.loads(args[0])
     elif "--cmd" in args:
         # --cmd "echo hello" --type powershell --timeout 30
-        cmd = {"co
+        cmd = {"command": args[args.index("--cmd") + 1]}
+        if "--type" in args:
+            cmd["type"] = args[args.index("--type") + 1]
+        if "--timeout" in args:
+            cmd["timeout"] = int(args[args.index("--timeout") + 1])
+    else:
+        # Treat first arg as the command string
+        cmd = {"command": args[0], "type": "powershell", "timeout": 30}
+
+    result, channel = send_command(cmd, force_fallback=force_fallback)
+    result["_channel"] = channel
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+    # Exit code
+    sys.exit(result.get("exit_code", 1))
+
+
+if __name__ == "__main__":
+    main()

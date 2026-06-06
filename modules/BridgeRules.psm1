@@ -1,4 +1,4 @@
-#Requires -Version 5.0
+﻿#Requires -Version 5.0
 <#
  BridgeRules.psm1 — YAML-free Rule Engine Module
  ──────────────────────────────────────────────────
@@ -236,11 +236,11 @@ function Log-ExecutionError {
     if ($Type -in @("cmd","c") -and $Command -match 'Start-Process') { $patternSignatures += "start_process_in_cmd" }
     if ($Command -match '\$pid:\s*\$_') { $patternSignatures += "dollar_pid_scope" }
     if ($cleanStderr -match "not recognized|is not a cmdlet|不是内部或外部命令") { $patternSignatures += "wrong_shell_type" }
-    $entry = @{
+    $entry = [PSCustomObject]@{
         cmd_id=$CmdId; timestamp=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"); type=$Type
         command_summary=$(if ($Command.Length -gt 120) { $Command.Substring(0, 120) + "..." } else { $Command })
         exit_code=$ExitCode; issue=$issueDesc; duration_ms=$DurationMs
-        patterns=$patternSignatures
+        patterns=@($patternSignatures)
         stderr_snippet=$(if ($cleanStderr.Length -gt 300) { $cleanStderr.Substring(0, 300) } else { $cleanStderr })
         clixml_stripped=$($StderrText.Length -gt 0 -and $cleanStderr.Length -eq 0)
         auto_detected=$true

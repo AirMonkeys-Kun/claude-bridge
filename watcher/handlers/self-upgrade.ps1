@@ -32,21 +32,19 @@ function Test-SelfUpgrade {
                     # Fall through — write the command anyway if queue read fails
                 }
 
-                $script:watcherScriptHash = $currentHash
-                $script:selfUpgradeLastTrigger = Get-Date
-                Write-Text -path $script:restartFlagFile -content ((Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"))
-                $restartCmd = @{
-                    state = "pending"
-                    cmd_id = "__SELF_UPGRADE_$(Get-Date -Format 'yyyyMMddHHmmss')__"
-                    type = "__BRIDGE_RESTART__"
-                    command = "__BRIDGE_RESTART__"
-                    timeout = 10
+                # 4. Drain protocol (P2.3) — wait for inflight commands to complete
+                $drainStart = Get-Date
+                $drainMaxSec = 30
+                $drainElapsed = 0
+                while ((Get-InflightCount) -gt 0) {
+                    $drainElapsed = [int]((Get-Date) - $drainStart).TotalSeconds
+                    if ($drainElapsed -ge $drainMaxSec) {
+                        Log "[SELF-UPGRADE] Drain timeout after ${drainElapsed}s — $((Get-InflightCount)) inflight still pending, forcing restart"
+                        break
+                    }
+                    # Let the main loop process inflight completions
+                    Start-Sleep -Milliseconds 200
                 }
-                Write-Text -path $script:queueFile -content ($restartCmd | ConvertTo-Json -Compress)
-                Log "[SELF-UPGRADE] Restart command written (60s cooldown engaged)"
-            }
-        } catch {
-            Log "[SELF-UPGRADE] Check failed: $_"
-        }
-    }
-}
+
+                if ((Get-InflightCount) -eq 0) {
+                    $drainDuration = [int]((Get-D

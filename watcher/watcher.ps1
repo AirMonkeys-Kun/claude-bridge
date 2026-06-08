@@ -95,19 +95,34 @@ if (-not $existing) {
     Log "Queue reset from state=$($existing.state)"
 }
 
-Log "Ready — V22+ modular (ScriptBlock fast-path, 50ms FSW timeout)"
+# Restore inflight commands from disk (P1.3 — survive self-upgrade restart)
+$restoredCount = Restore-InflightFromDisk
+if ($restoredCount -gt 0) {
+    Log "Restored $restoredCount inflight commands from disk"
+}
+
+# Reset worker health registry on startup (P2.1)
+Reset-WorkerHealth
+
+Log "Ready — V22+ modular (ScriptBlock fast-path, 50ms FSW timeout, dual-channel)"
 
 # ══════════════════════════════════════════════════════════════════
 # Main loop — event-driven with polling fallback
 # ══════════════════════════════════════════════════════════════════
+$script:pollCounter = 0
 while ($true) {
     try {
         # 1. Heartbeat
         Write-Heartbeat -Path $script:heartbeatFile
 
-        # 2. Wait for queue change (blocks until write OR 50ms timeout)
-        $script:queueWatcher.WaitForChanged([System.IO.WatcherChangeTypes]::Changed, 50) | Out-Null
+        # 2. Dual-channel queue reading (P3.1):
+        #    Always poll first (0-latency if command already pending),
+        #    then FSW wait for next command (50ms timeout).
         $queue = Read-Json -path $script:queueFile
+        if (-not $queue -or $queue.state -ne "pending") {
+            $script:queueWatcher.WaitForChanged([System.IO.WatcherChangeTypes]::Changed, 50) | Out-Null
+            $queue = Read-Json -path $script:queueFile
+        }
 
         # 3. Periodic housekeeping (~every 300 loops = ~60s)
         $script:housekeepCounter++
@@ -183,18 +198,4 @@ while ($true) {
         }
         try {
             $q = Read-Json -path $script:queueFile
-            if ($q -and $q.state -eq "pending" -and $q.cmd_id -ne "" -and $q.cmd_id -ne $script:lastCmdId) {
-                Log "[POLL] catch-block process $($q.cmd_id)"
-                $script:lastCmdId = $q.cmd_id
-                if ($q.type -eq "__INLINE__") {
-                    Invoke-InlineExecution -CmdId $q.cmd_id -RawCmd $q.command -StartTime (Get-Date)
-                } else {
-                    Reset-QueueToIdle -Path $script:queueFile
-                }
-            }
-        } catch {
-            Log "[POLL] Error: $($_.Exception.Message)"
-        }
-        Start-Sleep -Seconds 1
-    }
-}
+            if ($q -and $q.state -eq "pending" -and $q

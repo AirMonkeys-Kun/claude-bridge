@@ -2,6 +2,58 @@
 # Worker pool + Named Pipe dispatch — extracted from watcher.ps1 V22
 # ══════════════════════════════════════════════════════════════════
 
+# ℹ️ Worker health registry (P2.1 partial — in-memory, not yet persisted)
+$script:workerHealth = @{}
+
+function Reset-WorkerHealth {
+    <#.SYNOPSIS Clear worker health registry on startup / after pool reload.#>
+    $script:workerHealth = @{}
+}
+
+function Test-WorkerPipeHealth {
+    <#.SYNOPSIS Quick pre-flight check: ping worker pipe with 100ms timeout.
+     Returns $true if pipe responds, $false otherwise.
+     Updates health registry on failure.#>
+    param([string]$PipeName, [string]$WorkerId)
+
+    try {
+        $testPipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", $PipeName, [System.IO.Pipes.PipeDirection]::InOut)
+        $testPipe.Connect(100)  # 100ms timeout — fast failure
+        $testPipe.Close()
+        $testPipe.Dispose()
+        # Mark healthy
+        if ($script:workerHealth.ContainsKey($WorkerId)) {
+            $h = $script:workerHealth[$WorkerId]
+            $h.failure_count = 0
+            $h.status = "healthy"
+            $h.last_seen_healthy = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+        } else {
+            $script:workerHealth[$WorkerId] = @{
+                last_seen_healthy = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+                failure_count = 0
+                status = "healthy"
+            }
+        }
+        return $true
+    } catch {
+        # Update degraded state
+        if ($script:workerHealth.ContainsKey($WorkerId)) {
+            $h = $script:workerHealth[$WorkerId]
+            $h.failure_count++
+            if ($h.failure_count -ge 10) { $h.status = "dead" }
+            elseif ($h.failure_count -ge 3) { $h.status = "degraded" }
+        } else {
+            $script:workerHealth[$WorkerId] = @{
+                last_seen_healthy = $null
+                failure_count = 1
+                status = "degraded"
+                degraded_at = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+            }
+        }
+        return $false
+    }
+}
+
 function Get-WorkerPool {
     $now = Get-Date
     if (-not $script:pool -or -not $script:poolLastLoad -or (($now - $script:poolLastLoad).TotalSeconds -gt 30)) {
@@ -29,59 +81,6 @@ function Get-WorkerForType {
         default { "generic" }
     }
 
+    # Phase 0: Get all workers of the target type, filtered by PID alive
     $candidates = @($pool.workers | Where-Object {
-        $_.type -eq $targetType -and (Get-Process -Id $_.pid -ErrorAction SilentlyContinue)
-    })
-
-    if ($candidates.Count -eq 0 -and $targetType -ne "generic") {
-        Log "[DISPATCH] No '$targetType' worker — falling back to generic"
-        $candidates = @($pool.workers | Where-Object {
-            $_.type -eq "generic" -and (Get-Process -Id $_.pid -ErrorAction SilentlyContinue)
-        })
-    }
-
-    if ($candidates.Count -eq 0) { return $null }
-
-    $busyWorkerIds = @($script:inflight.Values | ForEach-Object { $_.worker.id })
-    $available = @($candidates | Where-Object { $_.id -notin $busyWorkerIds })
-    if ($available.Count -gt 0) { $candidates = $available }
-
-    $idx = [Math]::Max(0, $script:workerRR[$targetType])
-    $script:workerRR[$targetType] = ($idx + 1) % $candidates.Count
-    return $candidates[$idx % $candidates.Count]
-}
-
-function Dispatch-ToWorker {
-    param([string]$cid, [string]$ctype, [string]$cmd, [int]$timeout)
-
-    $worker = Get-WorkerForType -ctype $ctype
-    if (-not $worker) {
-        Log "[$cid] No worker available for type '$ctype'"
-        return $null
-    }
-
-    try {
-        $pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", $worker.pipe, [System.IO.Pipes.PipeDirection]::InOut)
-        $pipe.Connect(2000)
-        $reader = New-Object System.IO.StreamReader($pipe, $script:utf8)
-        $writer = New-Object System.IO.StreamWriter($pipe, $script:utf8)
-        $writer.AutoFlush = $true
-
-        $cmdJson = @{cmd_id=$cid; command=$cmd; type=$ctype; timeout=$timeout} | ConvertTo-Json -Compress
-        $writer.WriteLine($cmdJson)
-
-        $ackTask = $reader.ReadLineAsync()
-        $gotAck = $ackTask.Wait(100)
-
-        $pipe.Close()
-        if ($gotAck) {
-            Log "[$cid] DISPATCH to $($worker.id) — ACK received"
-        } else {
-            Log "[$cid] DISPATCH to $($worker.id) — sent (no ACK, assumed delivered)"
-        }
-        return $worker
-    } catch {
-        Log "[$cid] DISPATCH to $($worker.id) failed: $($_.Exception.Message)"
-        return $null
-    }
-}
+        $_.type -eq $targetType -and (Get-Proces

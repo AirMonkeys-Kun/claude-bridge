@@ -618,23 +618,16 @@ function Invoke-GuardianCheck {
         }
     }
 
-    Log "=== Guardian check #$($script:guardianRunCount) complete ==="
-}
+    # ── Step 7: Check user_bridge worker health ──
+    $userBridgeDir = Join-Path $script:clusterDir "user_bridge"
+    $userHbFile = Join-Path $userBridgeDir ".heartbeat"
+    $userLockFile = Join-Path $userBridgeDir ".lock"
+    $userStartedFlag = Join-Path $userBridgeDir ".user_bridge_started"
+    $userRunnerScript = Join-Path $userBridgeDir "runner.ps1"
 
-# ============================================================
-# Entry point
-# ============================================================
-
-try {
-    # Ensure log directory exists
-    $logDir = Split-Path $script:logFile -Parent
-    if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
-
-    Invoke-GuardianCheck
-} catch {
-    $ex = $_.Exception.ToString()
-    Log "FATAL: Unhandled exception: $ex"
-    exit 1
-}
-
-exit 0
+    $userBridgeDead = $false
+    if (Test-Path $userHbFile) {
+        try {
+            $hbText = Read-Text $userHbFile
+            if ($hbText) {
+                $hbTim

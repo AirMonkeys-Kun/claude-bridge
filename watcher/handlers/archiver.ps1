@@ -35,7 +35,7 @@ function Invoke-ArchiveResults {
     foreach ($f in $files) {
         $dateDir = $f.LastWriteTime.ToString("yyyy-MM-dd")
         $monthDir = $f.LastWriteTime.ToString("yyyy-MM")
-        $targetDir = Join-Path $script:archiveResults $monthDir $dateDir
+        $targetDir = Join-Path (Join-Path $script:archiveResults $monthDir) $dateDir
         if (-not (Test-Path $targetDir)) { New-Item -Path $targetDir -ItemType Directory -Force | Out-Null }
         $target = Join-Path $targetDir $f.Name
         try {

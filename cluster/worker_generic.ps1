@@ -70,8 +70,9 @@ WF $lockFile ([string]$PID)
 
 $idleQueue = '{"state":"idle","cmd_id":"","command":"","type":""}'
 $pipeRunning = $true
-$pipePs = [PowerShell]::Create()
-$null = $pipePs.AddScript({
+
+# ── Pipe server script (extracted for restart-capability) ──
+$script:pipeScriptBlock = {
     param($pn, $qf, $logF, $resultD, $baseD)
     $u8 = [System.Text.UTF8Encoding]::new($false)
     function W($m) { try { $t=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"); [System.IO.File]::AppendAllText($logF,"$t | [PIPE] $m`r`n",$u8) } catch {} }
@@ -85,7 +86,7 @@ $null = $pipePs.AddScript({
             $pipe = New-Object System.IO.Pipes.NamedPipeServerStream(
                 $pn,
                 [System.IO.Pipes.PipeDirection]::InOut,
-                1,
+                2,
                 [System.IO.Pipes.PipeTransmissionMode]::Message
             )
             $pipe.WaitForConnection()
@@ -257,17 +258,39 @@ $null = $pipePs.AddScript({
             WF $qf '{"state":"idle","cmd_id":"","command":"","type":""}'
 
             W "[$cid] PIPE-DIRECT DONE: exit=$exitCode dur=${elapsed}ms fast=$fastPath"
+            # Write pipe health indicator (for external monitors)
+            $healthFile = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($qf), ".pipe_health")
+            try { WF $healthFile ((Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")) } catch {}
             $pipe.Close()
 
         } catch {
-            W "Pipe server error: $_"
+            $script:pipeErrCount = if ($script:pipeErrCount) { $script:pipeErrCount + 1 } else { 1 }
+            W "Pipe server error #${script:pipeErrCount}: $_"
+            if ($script:pipeErrCount -ge 50) {
+                W "Too many consecutive pipe errors (#${script:pipeErrCount}) — exiting pipe runspace"
+                try { if ($pipe) { $pipe.Close() } } catch {}
+                return  # Exit this runspace
+            }
             Start-Sleep -Milliseconds 200
             try { if ($pipe) { $pipe.Close() } } catch {}
         }
     }
-}).AddArgument($script:pipeName).AddArgument($script:queueFile).AddArgument($script:logFile).AddArgument($script:resultDir).AddArgument($script:baseDir)
+}  # End of $script:pipeScriptBlock
 
-$pipeHandle = $pipePs.BeginInvoke()
+# ── Start pipe server runspace ──
+function Start-PipeRunspace {
+    $ps = [PowerShell]::Create()
+    $null = $ps.AddScript($script:pipeScriptBlock).AddArgument($script:pipeName).AddArgument($script:queueFile).AddArgument($script:logFile).AddArgument($script:resultDir).AddArgument($script:baseDir)
+    $handle = $ps.BeginInvoke()
+    return @{PowerShell=$ps; Handle=$handle}
+}
+$script:pipeRunspace = Start-PipeRunspace
+# Wait for pipe runspace to reach Running state (avoids false recreation on first health check)
+for ($i = 0; $i -lt 20; $i++) {
+    $st = $script:pipeRunspace.PowerShell.InvokeStateInfo.State
+    if ($st -eq [System.Management.Automation.PSInvocationState]::Running) { break }
+    Start-Sleep -Milliseconds 50
+}
 Log "V3 PIPE-DIRECT server started: $script:pipeName"
 
 # ── Initialize queue file ──
@@ -295,6 +318,23 @@ Log "=== $workerName V3 PIPE-DIRECT STARTED (pid=$PID) ==="
 while ($true) {
     # Heartbeat
     try { WF $script:heartbeatFile (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff") } catch {}
+
+    # ── Check pipe runspace health ──
+    # Only recreate on Completed/Failed — NOT on NotStarted (still starting up)
+    $pipeState = $script:pipeRunspace.PowerShell.InvokeStateInfo.State
+    if ($pipeState -eq [System.Management.Automation.PSInvocationState]::Completed -or
+        $pipeState -eq [System.Management.Automation.PSInvocationState]::Failed) {
+        Log "Pipe runspace state=$pipeState — recreating..."
+        try { $script:pipeRunspace.PowerShell.Dispose() } catch {}
+        $script:pipeRunspace = Start-PipeRunspace
+        # Wait for new runspace to reach Running state
+        for ($j = 0; $j -lt 20; $j++) {
+            $st = $script:pipeRunspace.PowerShell.InvokeStateInfo.State
+            if ($st -eq [System.Management.Automation.PSInvocationState]::Running) { break }
+            Start-Sleep -Milliseconds 50
+        }
+        Log "Pipe runspace recreated (state=$($script:pipeRunspace.PowerShell.InvokeStateInfo.State))"
+    }
 
     # FSW: blocks until queue.txt changed OR 500ms heartbeat timeout
     # (longer timeout since pipe is primary path)
@@ -343,49 +383,3 @@ while ($true) {
             } catch {
                 Log "[$cid] FALLBACK ScriptBlock failed ($($_.Exception.Message)) — subprocess fallback"
             }
-        }
-
-        # ── Subprocess fallback ──
-        try {
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            if ($ctype -eq "cmd") {
-                $psi.FileName = "cmd.exe"; $psi.Arguments = "/c $cmd"
-            } elseif ($ctype -eq "wsl") {
-                $psi.FileName = "wsl.exe"; $psi.Arguments = "-e bash -c `"$($cmd -replace '"', '\"')`""
-            } else {
-                $psi.FileName = "powershell.exe"
-                $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"$($cmd -replace '"', '\"')`""
-            }
-            $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
-            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-            $psi.StandardOutputEncoding = $script:utf8nobom; $psi.StandardErrorEncoding = $script:utf8nobom
-
-            $p = [System.Diagnostics.Process]::Start($psi)
-            if (-not $p) { throw "Process.Start returned null" }
-
-            $outTask = $p.StandardOutput.ReadToEndAsync()
-            $errTask = $p.StandardError.ReadToEndAsync()
-
-            if ($p.WaitForExit(($timeout+2)*1000)) {
-                $exitCode = $p.ExitCode
-                $stdout = $outTask.Result
-                $stderr = $errTask.Result
-            } else {
-                $p.Kill(); Start-Sleep -Milliseconds 300
-                try { $stdout = $outTask.Result } catch { $stdout = "[TIMEOUT]" }
-                try { $stderr = $errTask.Result } catch {}
-                $exitCode = -1; $errorMsg = "TIMEOUT after ${timeout}s"
-            }
-            $p.Dispose()
-        } catch {
-            $errorMsg = $_.Exception.Message
-            Log "[$cid] FALLBACK EXCEPTION: $errorMsg"
-        }
-
-        $elapsed = [int]((Get-Date) - $t0).TotalMilliseconds
-        $res = @{state=$(if($errorMsg){"error"}else{"done"});cmd_id=$cid;exit_code=$exitCode;stdout=$stdout;stderr=$stderr;error=$errorMsg;duration_ms=$elapsed;fast_path=$fastPath;pipe_direct=$false;timestamp=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
-        WF (Join-Path $script:resultDir "r_${cid}.json") ($res | ConvertTo-Json -Compress)
-        Log "[$cid] FALLBACK DONE: exit=$exitCode dur=${elapsed}ms fast=$fastPath"
-        WF $script:queueFile $idleQueue
-    }
-}

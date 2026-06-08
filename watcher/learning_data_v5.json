@@ -1,0 +1,119 @@
+{
+  "version": "1.0",
+  "generated": "2026-06-08 10:12:00",
+  "source_logs": {
+    "watcher_20260608_101023.log": "4.5MB, 41537 lines, June 7 23:01 → June 8 09:55",
+    "guardian_v3.log": "1.1MB, 16211 lines, June 4 11:22 → June 6 22:17",
+    "error_history.json": "18 errors from June 6-7"
+  },
+  "extracted_patterns": [
+    {
+      "id": "fsw-null-reference",
+      "severity": "critical",
+      "occurrences": 10004,
+      "timeframe": "2026-06-08 00:16:08 → 03:08:33 (2h52m)",
+      "error": "System.Management.Automation.RuntimeException: 不能对 Null 值表达式调用方法。",
+      "root_cause": ".NET GC 回收了 FileSystemWatcher 对象。PowerShell 的 $script:queueWatcher 变量持有引用但仍被 GC 视为不可达。WaitForChanged() 每 50ms 被调用，null 时抛出 RuntimeException。",
+      "impact": "FSW null 导致每 50ms 抛一次异常，catch 块中原来的逻辑只做了 Start-Sleep -Seconds 1，没有恢复 FSW。2h52m 内产生 10,004 行 FATAL 日志，日志增长 ~3.5MB。",
+      "fix": "catch 块增加 FSW 重新初始化 + EnableRaisingEvents=$true + poll fallback（已实施）",
+      "lesson": "FileSystemWatcher 在长时间运行的 PowerShell 脚本中不可靠。更可靠的方案：使用轮询（System.IO.File.ReadAllText + 时间戳比较）替代 FSW，或者在 catch 块中同时维护 FSW + 轮询双通道。"
+    },
+    {
+      "id": "file-lock-contention",
+      "severity": "medium",
+      "occurrences": 4,
+      "timeframe": "June 7-8",
+      "error": "WriteAllText: 文件 \"queue.txt.tmp\" / \".watcher.lock\" 正由另一进程使用",
+      "root_cause": "Write-SafeFile 使用 temp+rename 模式（WriteAllText 到 .tmp，然后 Move-Item 到目标名）。当两个进程同时写不同数据到同一文件时，第一个.tmp文件还未 rename，第二个进程无法创建同名.tmp。",
+      "impact": "写操作失败，日志写入 fallback.log。队列操作可能丢失。",
+      "fix": "Write-SafeFile 已有 3 次重试循环（RE-WriteFile），但 bridge-core 的 Write-SafeFile 没有。统一使用带重试的写入函数。",
+      "lesson": "所有文件写入路径必须使用统一的重试机制（至少 3 次，间隔 50ms），包括 Write-SafeFile、Write-Text、Write-Heartbeat。lock 文件和 queue.txt 的 .tmp 文件需要 UUID 后缀或进程 ID 后缀来避免跨进程冲突。"
+    },
+    {
+      "id": "bridge-agent-false-down",
+      "severity": "high",
+      "occurrences": 34,
+      "timeframe": "June 7 23:04 → June 8 ~03:00",
+      "error": "Housekeeping 检测到 bridge_agent DOWN（port 19850 未监听）",
+      "root_cause": "housekeeping 每 ~60s 检查一次 TCP 端口。检查时刻恰好 bridge_agent 在处理 INLINE 请求（繁忙/慢响应），被误判为 DOWN 后立即重启。造成了 32+ bridge_agent 实例风暴。",
+      "impact": "34 次误判重启，累计创建 32+ 个 bridge_agent 实例（新进程启动后旧进程仍在 running），端口被新实例占用后旧实例报错退出。",
+      "fix": "（方案待实施）端口检查应带 retry：连续 3 次检查失败（每次间隔 1s）才判定 DOWN。或在 housekeeping 中加入 PID 存活检查 + 端口检查双重确认。",
+      "lesson": "单次 TCP 端口扫描不能作为进程存活的唯一判定。需要 Multi-check: (1) 进程存在 (Get-Process) (2) 端口监听 (Get-NetTCPConnection) (3) HTTP health endpoint。"
+    },
+    {
+      "id": "proxy-instability-during-storm",
+      "severity": "medium",
+      "occurrences": 85,
+      "timeframe": "June 7 23:01 → June 8 09:55",
+      "error": "Proxy port 4000 频繁 DOWN → restart",
+      "root_cause": "与 bridge_agent 误判相同原因。FSW null 错误导致 watcher 主循环异常频繁触发，housekeeping 对 proxy 的检查也出现假阳性。同时 proxy 本身在错误风暴中可能因资源争用（端口、文件锁）而崩溃。",
+      "impact": "重启 85 次，每次重启耗时 ~2-5s，累计约 7min 的 proxy 不可用时间。",
+      "fix": "（方案待实施）与 bridge_agent 相同的 multi-check 方案。同时检查 proxy 是否存在自身 crash 循环（重启计数器 + 反震荡退避）。",
+      "lesson": "与 bridge_agent 相同。所有 health check 都需要 retry + backoff。另外 proxy 本身需要更健壮的 exit/crash 恢复。"
+    },
+    {
+      "id": "self-upgrade-storm",
+      "severity": "low (dev only)",
+      "occurrences": 92,
+      "timeframe": "June 7 23:05 → June 8 02:56",
+      "error": "watcher.ps1 哈希频繁变化触发自升级循环",
+      "root_cause": "开发过程中频繁修改 watcher.ps1（修复 FSW bug 等），每次修改后哈希变化 → 触发自升级 → 重启。60s 冷却期足够防止无限循环但频繁重启影响稳定性。",
+      "impact": "76 次重启命令写入，部分被 dedup 捕获。不影響生产环境。",
+      "fix": "当前 60s cooldown + queue dedup 已经足够。可考虑增加 draft mode（仅在 dev 分支触发时不重启）。",
+      "lesson": "开发环境部署时应启用维护锁（.maintenance.lock），避免开发中频繁修改触发自升级。"
+    },
+    {
+      "id": "guardian-task-disabled-no-recovery",
+      "severity": "critical",
+      "occurrences": 1,
+      "timeframe": "2026-06-06 22:17 → 2026-06-08 10:07",
+      "error": "BridgeGuardian-V3 计划任务被禁用",
+      "root_cause": "未知原因（可能 Windows 更新、安全策略、或 watcher 的 Assert-GuardianTask 误操作）。一旦禁用后没有任何组件可以重新启用它（chicken-and-egg 问题：Guardian 需要启用才能自恢复，但启用 Guardian 需要外部操作）。",
+      "impact": "1.5 天无自动化恢复能力。期间 watcher 和 bridge_agent 如果崩溃无法自动恢复。",
+      "fix": "watcher 的 Assert-GuardianTask 应增加 Enable 检测，如果任务存在但 Disabled 则自动 Enable。housekeeping 每 300 循环（~60s）检查一次。",
+      "lesson": "自我修复系统不能只有 Guardian → Watcher 单向依赖。需要 Watcher → Guardian 反向检测：watcher 定期检查 Guardian 任务状态，如果 disabled/expired 则重新注册或启用。"
+    },
+    {
+      "id": "inline-execution-dominates-pipes",
+      "severity": "info",
+      "occurrences": 1927,
+      "timeframe": "whole log",
+      "error": "1927 INLINE vs 28 ASYNC-DISPATCH — 98.6% 命令走 INLINE 路径，只有 1.4% 走 named pipe",
+      "root_cause": "INLINE 是 ScriptBlock 直接在当前进程中运行，不能利用多 worker 的并行能力。虽然避免了 named pipe 的序列化开销（~1ms），但限制了并行吞吐。",
+      "impact": "单线程处理所有命令，长命令阻塞后续命令。28 个 ASYNC-DISPATCH 中有 0 个失败，说明 named pipe 路径是稳定的但未被充分利用。",
+      "fix": "（设计决策）短期：INLINE 是正确选择（低延迟、无序列化）。长期：对于 >5s 的命令自动路由到 named pipe worker。",
+      "lesson": "当前架构中 INLINE 适合快速命令（<500ms），长命令应使用 worker 避免阻塞队列。"
+    },
+    {
+      "id": "timeout-patterns",
+      "severity": "medium",
+      "occurrences": 13,
+      "timeframe": "whole log",
+      "error": "命令超时（15-30s 限制）",
+      "root_cause": "部分命令（如 bridge_agent 启动、proxy 重启）需要 >15s 完成，但默认超时 15s 不够。",
+      "impact": "13 次超时导致命令被 kill 或 fallback，部分结果丢失。",
+      "fix": "INLINE 命令未传入 timeout 时，应自动检测命令类型并设置合理超时。比如 bridge_agent 启动 → 30s，一般查询 → 15s。",
+      "lesson": "超时设置应根据命令类型动态调整。长命令（启动服务、安装包）需要 30-60s 超时。"
+    }
+  ],
+  "worker_pool_history": {
+    "14_workers": 3194,
+    "16_workers": 126,
+    "13_workers": 97,
+    "15_workers": 57,
+    "12_workers": 13,
+    "zero_workers_during_restart": 13
+  },
+  "timing_profile": {
+    "guardian_check_interval": "~60s",
+    "guardian_total_checks": 3534,
+    "guardian_uptime": "99.8% (3527/3534 alive)",
+    "housekeeping_interval": "~60s (every 300 loop iterations)",
+    "watcher_startup_time": "2-3s (from process start to stable heartbeat)",
+    "inline_avg_duration": "~50-100ms (simple commands), up to 32s (deploy workers)",
+    "named_pipe_dispatch": "~1ms overhead",
+    "proxy_restart_time": "~2-5s",
+    "bridge_agent_restart_time": "~3-8s",
+    "fswnull_downtime": "2h52m (10,004 iterations)"
+  }
+}

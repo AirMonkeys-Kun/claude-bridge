@@ -58,6 +58,20 @@ _watchdog_proc_lock = threading.Lock()
 _start_time = time.time()
 
 
+def _emergency_log(msg):
+    """Last-resort logging — avoids log() in case dispatch.log() is broken."""
+    ts = time.localtime()
+    line = f"[{ts.tm_year:04d}-{ts.tm_mon:02d}-{ts.tm_mday:02d} "
+    line += f"{ts.tm_hour:02d}:{ts.tm_min:02d}:{ts.tm_sec:02d}] {msg}\n"
+    try:
+        with open(Path(__file__).resolve().parent / "bridge_agent_stdout.log", "a", encoding="utf-8") as f:
+            f.write("[EMERGENCY] " + line)
+    except OSError:
+        pass
+    sys.stderr.write("[EMERGENCY] " + line)
+    sys.stderr.flush()
+
+
 # ── Signal handling ───────────────────────────────────────────────────
 
 def _signal_handler(signum, frame):
@@ -262,4 +276,201 @@ class HealthHandler:
                     else:
                         body = '{"error":"not_found"}'
                         conn.sendall((self.RESP_503 + body).encode("utf-8"))
-            exce
+            except OSError:
+                pass
+            finally:
+                try:
+                    conn.close()
+                except OSError:
+                    pass
+
+        srv.close()
+        log("Health HTTP server stopped")
+
+
+# ── Watchdog subprocess management ────────────────────────────────────
+
+def _launch_watchdog():
+    """Launch watchdog as a subprocess. Returns Popen or None."""
+    global _watchdog_proc
+    watchdog_script = Path(__file__).resolve().parent / "bridge_agent_watchdog.py"
+    if not watchdog_script.exists():
+        log(f"[WATCHDOG] Script not found: {watchdog_script}")
+        return None
+
+    parent_pid = os.getpid()
+    try:
+        # Route stderr to a file so crash traces are diagnosable
+        stderr_log = watchdog_script.parent / "bridge_agent_watchdog_stderr.log"
+        stderr_fh = open(stderr_log, "a", encoding="utf-8")
+        proc = subprocess.Popen(
+            [sys.executable, str(watchdog_script), "--parent-pid", str(parent_pid)],
+            cwd=str(watchdog_script.parent),
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdout=subprocess.DEVNULL,
+            stderr=stderr_fh,
+        )
+        with _watchdog_proc_lock:
+            _watchdog_proc = proc
+        log(f"[WATCHDOG] Launched watchdog subprocess PID={proc.pid} (parent PID={parent_pid})")
+        return proc
+    except Exception as e:
+        log(f"[WATCHDOG] Failed to launch watchdog: {e}")
+        return None
+
+
+def _watchdog_watchman():
+    """Background thread that monitors the watchdog subprocess health.
+
+    If the watchdog dies, restart it with exponential backoff.
+    CRITICAL: catch-all exception handler prevents silent thread death.
+    """
+    backoff = 1
+    max_backoff = 30
+
+    while not _shutdown_event.is_set():
+        try:
+            time.sleep(WATCHDOG_CHECK_INTERVAL)
+
+            with _watchdog_proc_lock:
+                proc = _watchdog_proc
+                alive = proc is not None and proc.poll() is None
+
+            if alive:
+                backoff = 1  # reset on success
+                continue
+
+            if _shutdown_event.is_set():
+                break
+
+            log(f"[WATCHDOG] Watchdog subprocess is dead — restarting (backoff={backoff}s)")
+            time.sleep(backoff)
+            _launch_watchdog()
+            backoff = min(backoff * 2, max_backoff)
+        except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            # Emergency direct stderr write — log() itself may be broken
+            _emergency_log(f"[WATCHDOG] Unhandled in watchman: {e}\n{tb}")
+            time.sleep(5)
+
+
+# ── Graceful shutdown ─────────────────────────────────────────────────
+
+def _wait_for_inflight(done_event, timeout=30):
+    """Wait for active connections to drain, then signal done."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with active_lock:
+            if active_connections == 0:
+                break
+        time.sleep(0.5)
+
+    log(f"Shutdown complete — {active_connections} active connections remaining")
+    done_event.set()
+
+
+# ── Main ──────────────────────────────────────────────────────────────
+
+def main():
+    port = int(os.environ.get("BRIDGE_PORT", DEFAULT_PORT))
+    global _start_time, _watchdog_proc
+    _start_time = time.time()
+
+    _setup_signal_handlers()
+
+    if not WATCHER_DIR.exists():
+        log(f"ERROR: Watcher directory not found: {WATCHER_DIR}")
+        sys.exit(1)
+
+    # Load worker pool
+    pool = load_worker_pool(force=True)
+    alive_count = 0
+    if pool and pool.get("workers"):
+        alive_count = sum(1 for w in pool["workers"] if is_pid_alive(w["pid"]))
+
+    try:
+        import win32pipe
+        pipe_mode = "win32pipe"
+    except ImportError:
+        pipe_mode = "file I/O fallback"
+
+    log(f"bridge_agent.py Phase 4 (hardened) starting")
+    log(f"  Listening:     0.0.0.0:{port}")
+    log(f"  Worker pool:   {alive_count} alive workers")
+    log(f"  Pipe mode:     {pipe_mode}")
+    log(f"  Queue fallback: {QUEUE_FILE}")
+    log(f"  Max clients:   {MAX_CONCURRENT}")
+    log(f"  Thread pool:   {THREAD_POOL_SIZE} workers")
+    log(f"  Health HTTP:   0.0.0.0:{HEALTH_PORT}/health")
+    log(f"  Watchdog:      bridge_agent_watchdog.py (subprocess)")
+
+    reset_queue()
+
+    # ── Launch watchdog subprocess ───────────────────────────────────
+    _launch_watchdog()
+
+    # ── Start watchdog health monitor (watcher for the watchdog) ─────
+    watchman = threading.Thread(target=_watchdog_watchman, daemon=True, name="watchdog-watchman")
+    watchman.start()
+    log(f"  Watchdog watchman:  active (check every {WATCHDOG_CHECK_INTERVAL}s)")
+
+    # ── Start health HTTP server (background thread) ──────────────────
+    health = HealthHandler()
+    health_thread = threading.Thread(target=health.serve, daemon=True, name="health-http")
+    health_thread.start()
+
+    # ── Main TCP server ──────────────────────────────────────────────
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("0.0.0.0", port))
+    srv.listen(MAX_CONCURRENT)
+    srv.settimeout(1.0)  # allow periodic shutdown check
+
+    log(f"Ready — Phase 4 (pipe direct + queue fallback)")
+
+    try:
+        with ThreadPoolExecutor(max_workers=THREAD_POOL_SIZE) as pool:
+            while not _shutdown_event.is_set():
+                try:
+                    conn, addr = srv.accept()
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+
+                pool.submit(handle_client, conn, addr)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        log("Shutting down gracefully...")
+        srv.close()
+
+        # Wait for in-flight connections to drain
+        done = threading.Event()
+        waiter = threading.Thread(target=_wait_for_inflight, args=(done,), daemon=True)
+        waiter.start()
+        done.wait(timeout=30)
+
+        # Terminate watchdog subprocess
+        with _watchdog_proc_lock:
+            if _watchdog_proc and _watchdog_proc.poll() is None:
+                log(f"Terminating watchdog subprocess PID={_watchdog_proc.pid}")
+                try:
+                    _watchdog_proc.terminate()
+                    _watchdog_proc.wait(timeout=5)
+                except Exception:
+                    try:
+                        _watchdog_proc.kill()
+                        _watchdog_proc.wait(timeout=2)
+                    except Exception:
+                        pass
+
+        log("bridge_agent.py shutdown complete")
+
+
+if __name__ == "__main__":
+    if "--help" in sys.argv:
+        print(__doc__)
+        sys.exit(0)
+    main()

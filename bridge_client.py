@@ -154,10 +154,12 @@ def file_send_command(cmd, bridge_dir=BRIDGE_DIR):
         "timeout": timeout,
     }
 
-    # Write to queue
+    # Write to queue with fsync (force 9P flush to reach Windows)
     try:
         with open(queue_path, "w", encoding="utf-8") as f:
             f.write(json.dumps(pending, ensure_ascii=False))
+            f.flush()
+            os.fsync(f.fileno())  # Force 9P write-back cache flush
     except Exception as e:
         return {
             "state": "error", "cmd_id": cmd_id,

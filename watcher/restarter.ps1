@@ -40,6 +40,7 @@ Log "OldPID=$OldPID WatcherPath=$WatcherPath"
 # ── Step 1: Wait for old watcher to exit ──
 if ($OldPID -gt 0) {
     $retries = 0
+    $forceKillSent = $false
     while ($retries -lt 120) {  # max 120s wait
         $proc = Get-Process -Id $OldPID -ErrorAction SilentlyContinue
         if (-not $proc) {
@@ -51,12 +52,24 @@ if ($OldPID -gt 0) {
             Log "PID=$OldPID is no longer powershell — watcher has exited"
             break
         }
+        # Force-kill after 10s if old watcher hangs (e.g. blocked on long command)
+        if ($retries -ge 10 -and -not $forceKillSent) {
+            Log "Old watcher PID=$OldPID hung after 10s — force killing"
+            taskkill /F /PID $OldPID | Out-Null
+            $forceKillSent = $true
+            Start-Sleep -Milliseconds 500
+            break
+        }
         Start-Sleep -Seconds 1
         $retries++
     }
     if ($retries -ge 120) {
-        Log "WARNING: Timeout waiting for old watcher PID=$OldPID — proceeding anyway"
+        Log "WARNING: Timeout waiting for old watcher PID=$OldPID — force killing"
+        taskkill /F /PID $OldPID -ErrorAction SilentlyContinue | Out-Null
     }
+    # Clean up stale lock file so new watcher doesn't refuse to start
+    $lockFile = Join-Path (Split-Path -Parent $WatcherPath) ".watcher.lock"
+    try { Remove-Item $lockFile -Force -ErrorAction SilentlyContinue } catch {}
 }
 
 # Small extra delay for file handles to release

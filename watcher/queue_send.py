@@ -7,7 +7,7 @@ Usage:
 import json, os, sys, time, argparse
 
 def write_queue(queue_path, cmd_id, command, cmd_type="cmd", timeout=15):
-    """Write a command to the bridge queue as valid JSON."""
+    """Write a command to the bridge queue as valid JSON with fsync."""
     data = {
         "state": "pending",
         "cmd_id": cmd_id,
@@ -15,8 +15,10 @@ def write_queue(queue_path, cmd_id, command, cmd_type="cmd", timeout=15):
         "type": cmd_type,
         "timeout": timeout
     }
-    with open(queue_path, "w", encoding="ascii") as f:
-        json.dump(data, f, ensure_ascii=True)
+    with open(queue_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+        f.flush()
+        os.fsync(f.fileno())  # Force 9P write-back cache flush to Windows
     return True
 
 def wait_result(result_dir, cmd_id, max_wait=30):
@@ -51,5 +53,4 @@ if __name__ == "__main__":
     
     if args.wait:
         result_dir = os.path.dirname(queue_path)
-        result = wait_result(result_dir, args.id, args.timeout + 5)
-        print(json.dumps(result, indent=2))
+      

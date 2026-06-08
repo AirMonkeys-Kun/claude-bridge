@@ -182,7 +182,7 @@
                                   "to_type":  "powershell",
                                   "description":  "含 python 的命令改用 powershell 类型执行，避免 GBK 编码问题"
                               },
-                      "hits":  4,
+                      "hits":  7,
                       "created":  "2026-06-04",
                       "example_before":  "type=cmd, command=python script.py",
                       "example_after":  "type=powershell, command=python script.py"
@@ -216,7 +216,7 @@
                                   "find":  "|",
                                   "replace_with":  "^|"
                               },
-                      "hits":  23,
+                      "hits":  24,
                       "created":  "2026-06-04",
                       "example_before":  "echo hello | findstr hello",
                       "example_after":  "echo hello ^| findstr hello"
@@ -239,47 +239,29 @@
                       "example_after":  "type=powershell, command=schtasks /Query /FO CSV /NH /TN \u0027BridgeGuardian-V2\u0027 | Format-List"
                   },
                   {
-                      "id":  "rule-template",
-                      "description":  "新规则模板 — 遇到新错误时克隆此规则填写",
+                      "id":  "guardian-task-enable-check",
+                      "description":  "Guardian 计划任务被禁用时自动重新启用（修复 chicken-and-egg 问题：Guardian 需要运行才能自恢复，但禁用后只能靠外部操作恢复）",
                       "triggers":  {
-                                       "type":  "any",
-                                       "error_in_stderr":  ""
+                                       "type":  "powershell",
+                                       "pattern_in_command":  "BridgeGuardian"
                                    },
                       "fix":  {
-                                  "action":  "manual",
-                                  "description":  "待分析后填写修复方案"
+                                  "action":  "prepend",
+                                  "text":  "$t=Get-ScheduledTask 'BridgeGuardian-V3' -ErrorAction SilentlyContinue; if($t -and $t.State -eq 'Disabled'){Enable-ScheduledTask 'BridgeGuardian-V3'; Write-Warning 'Guardian task was disabled — re-enabled'}; ",
+                                  "description":  "在执行任何 BridgeGuardian 相关命令前先检查任务状态，Disabled 则自动 Enable"
                               },
                       "hits":  0,
-                      "is_template":  true,
-                      "created":  "2026-05-31"
+                      "created":  "2026-06-08",
+                      "example_before":  "Get-ScheduledTask 'BridgeGuardian-V3'",
+                      "example_after":  "$t=Get-ScheduledTask 'BridgeGuardian-V3' -ErrorAction SilentlyContinue; if($t -and $t.State -eq 'Disabled'){Enable-ScheduledTask 'BridgeGuardian-V3'}; Get-ScheduledTask 'BridgeGuardian-V3'"
                   },
                   {
-                      "id":  "auto-cmd-escape-ampersand",
-                      "auto_generated":  true,
-                      "confidence":  100,
-                      "description":  "Escape \u0026\u0026 in cmd mode",
-                      "generation_source":  "ampersand 9 times",
+                      "id":  "watcher-fsw-multi-check",
+                      "description":  "FileSystemWatcher 在长时间运行后被 .NET GC 回收导致 NullReference。先检查 FSW 是否存活 + 心跳新鲜度，避免假阳性 FATAL",
                       "triggers":  {
-                                       "pattern_in_command":  "\u0026\u0026",
-                                       "type":  "cmd"
+                                       "type":  "any",
+                                       "pattern_in_command":  "Queue reset|heartbeat|queue.txt"
                                    },
-                      "test_results":  {
-                                           "matched":  9,
-                                           "bonus":  10,
-                                           "passed":  true,
-                                           "falsePositives":  0,
-                                           "reason":  "hit_rate=20.5% matched=9 total=44"
-                                       },
-                      "active":  true,
                       "fix":  {
-                                  "replace_with":  "^\u0026^\u0026",
-                                  "action":  "escape",
-                                  "find":  "\u0026\u0026"
-                              },
-                      "created":  "2026-06-03 21:24:14.421",
-                      "hits":  2
-                  }
-              ],
-    "version":  "2.0",
-    "last_updated":  "2026-06-06 21:56:54.931"
-}
+                                  "action":  "prepend",
+                                  "text":  "# FSW safety: if queueWatcher is null, reinit before proceeding; if (

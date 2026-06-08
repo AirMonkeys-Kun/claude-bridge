@@ -44,6 +44,12 @@ function Invoke-Housekeeping {
     if ($Counter % 300 -eq 0) {
         Clean-HostLoopMode
         Assert-GuardianTask
+
+        # Gap 1a: Archive old result files + rotated logs (replace delete with archive)
+        try {
+            Invoke-Archive -ResultAgeHours 1 -Purge
+        } catch { Log "[HOUSEKEEP] Archive error: $($_.Exception.Message)" }
+
         # Rule engine: generate auto-rules from error history + prune stale rules
         try {
             $newRules = Generate-Rules

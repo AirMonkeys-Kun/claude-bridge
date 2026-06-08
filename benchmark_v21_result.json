@@ -1,322 +1,318 @@
 ﻿{
     "total_fail":  0,
     "arch":  "V21",
-    "iterations":  5,
+    "iterations":  3,
     "system_pool":  {
-                        "count":  14,
+                        "count":  16,
                         "workers":  [
                                         {
                                             "id":  "generic_1",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  28848,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  19596,
                                             "type":  "generic",
                                             "queue":  "cluster\\generic_1\\queue.txt",
                                             "pipe":  "Cluster_Wkr_generic_1"
                                         },
                                         {
                                             "id":  "generic_2",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  36764,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  14144,
                                             "type":  "generic",
                                             "queue":  "cluster\\generic_2\\queue.txt",
                                             "pipe":  "Cluster_Wkr_generic_2"
                                         },
                                         {
                                             "id":  "generic_3",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  35832,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  11804,
                                             "type":  "generic",
                                             "queue":  "cluster\\generic_3\\queue.txt",
                                             "pipe":  "Cluster_Wkr_generic_3"
                                         },
                                         {
                                             "id":  "generic_4",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  26752,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  12668,
                                             "type":  "generic",
                                             "queue":  "cluster\\generic_4\\queue.txt",
                                             "pipe":  "Cluster_Wkr_generic_4"
                                         },
                                         {
+                                            "id":  "generic_5",
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  18396,
+                                            "type":  "generic",
+                                            "queue":  "cluster\\generic_5\\queue.txt",
+                                            "pipe":  "Cluster_Wkr_generic_5"
+                                        },
+                                        {
+                                            "id":  "generic_6",
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  21188,
+                                            "type":  "generic",
+                                            "queue":  "cluster\\generic_6\\queue.txt",
+                                            "pipe":  "Cluster_Wkr_generic_6"
+                                        },
+                                        {
                                             "id":  "file_1",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  11496,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  23476,
                                             "type":  "file",
                                             "queue":  "cluster\\file_1\\queue.txt",
                                             "pipe":  "Cluster_Wkr_file_1"
                                         },
                                         {
                                             "id":  "file_2",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  27196,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  15912,
                                             "type":  "file",
                                             "queue":  "cluster\\file_2\\queue.txt",
                                             "pipe":  "Cluster_Wkr_file_2"
                                         },
                                         {
                                             "id":  "file_3",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  34064,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  25616,
                                             "type":  "file",
                                             "queue":  "cluster\\file_3\\queue.txt",
                                             "pipe":  "Cluster_Wkr_file_3"
                                         },
                                         {
                                             "id":  "file_4",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  36988,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  25756,
                                             "type":  "file",
                                             "queue":  "cluster\\file_4\\queue.txt",
                                             "pipe":  "Cluster_Wkr_file_4"
                                         },
                                         {
                                             "id":  "process_1",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  15740,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  25868,
                                             "type":  "process",
                                             "queue":  "cluster\\process_1\\queue.txt",
                                             "pipe":  "Cluster_Wkr_process_1"
                                         },
                                         {
                                             "id":  "process_2",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  3248,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  26000,
                                             "type":  "process",
                                             "queue":  "cluster\\process_2\\queue.txt",
                                             "pipe":  "Cluster_Wkr_process_2"
                                         },
                                         {
                                             "id":  "system_1",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  33996,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  26200,
                                             "type":  "system",
                                             "queue":  "cluster\\system_1\\queue.txt",
                                             "pipe":  "Cluster_Wkr_system_1"
                                         },
                                         {
                                             "id":  "system_2",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  35232,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  26288,
                                             "type":  "system",
                                             "queue":  "cluster\\system_2\\queue.txt",
                                             "pipe":  "Cluster_Wkr_system_2"
                                         },
                                         {
                                             "id":  "wsl_1",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  32012,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  26592,
                                             "type":  "wsl",
                                             "queue":  "cluster\\wsl_1\\queue.txt",
                                             "pipe":  "Cluster_Wkr_wsl_1"
                                         },
                                         {
                                             "id":  "user_1",
-                                            "started":  "2026-06-04 15:28:29",
-                                            "pid":  31472,
+                                            "started":  "2026-06-08 10:03:06",
+                                            "pid":  25632,
                                             "type":  "user",
                                             "queue":  "cluster\\user_1\\queue.txt",
                                             "pipe":  "Cluster_Wkr_user_1"
                                         }
                                     ]
                     },
-    "warmup":  2,
-    "timestamp":  "2026-06-04 16:26:45.557",
+    "warmup":  1,
+    "timestamp":  "2026-06-08 10:31:53.055",
     "results":  {
                     "roundtrip_pwd":  {
-                                          "n":  5,
+                                          "n":  3,
                                           "times":  [
                                                         92,
-                                                        92,
-                                                        108,
-                                                        91,
+                                                        2120,
                                                         92
                                                     ],
-                                          "min_ms":  91,
+                                          "min_ms":  92,
                                           "errors":  0,
                                           "med_ms":  92,
-                                          "max_ms":  108,
-                                          "avg_ms":  95
+                                          "max_ms":  2120,
+                                          "avg_ms":  768
                                       },
                     "stress_50":  {
                                       "n":  50,
                                       "times":  [
-                                                    106,
-                                                    94,
-                                                    95,
-                                                    92,
-                                                    106,
-                                                    154,
-                                                    90,
-                                                    76,
-                                                    92,
-                                                    78,
-                                                    153,
-                                                    140,
-                                                    118,
-                                                    122,
-                                                    92,
-                                                    123,
-                                                    93,
-                                                    94,
-                                                    94,
-                                                    92,
-                                                    92,
-                                                    77,
-                                                    89,
-                                                    91,
-                                                    92,
-                                                    88,
-                                                    244,
+                                                    87,
                                                     108,
                                                     77,
-                                                    92,
-                                                    109,
-                                                    76,
-                                                    76,
-                                                    92,
-                                                    79,
-                                                    91,
-                                                    75,
                                                     124,
-                                                    75,
-                                                    77,
-                                                    107,
-                                                    77,
-                                                    91,
+                                                    96,
+                                                    2109,
+                                                    2149,
+                                                    94,
                                                     92,
-                                                    80,
-                                                    76,
-                                                    76,
-                                                    107,
                                                     77,
-                                                    139
+                                                    108,
+                                                    108,
+                                                    174,
+                                                    139,
+                                                    80,
+                                                    92,
+                                                    94,
+                                                    2179,
+                                                    94,
+                                                    110,
+                                                    169,
+                                                    156,
+                                                    93,
+                                                    2115,
+                                                    93,
+                                                    92,
+                                                    92,
+                                                    78,
+                                                    170,
+                                                    108,
+                                                    93,
+                                                    105,
+                                                    2087,
+                                                    94,
+                                                    156,
+                                                    108,
+                                                    77,
+                                                    79,
+                                                    2106,
+                                                    108,
+                                                    91,
+                                                    93,
+                                                    78,
+                                                    94,
+                                                    2119,
+                                                    79,
+                                                    93,
+                                                    107,
+                                                    78,
+                                                    76
                                                 ],
-                                      "min_ms":  75,
+                                      "min_ms":  76,
                                       "errors":  0,
-                                      "med_ms":  92,
-                                      "max_ms":  244,
-                                      "avg_ms":  99
+                                      "med_ms":  94,
+                                      "max_ms":  2179,
+                                      "avg_ms":  385.6
                                   },
                     "v21_concurrent_mixed":  {
                                                  "n":  1,
                                                  "times":  [
-                                                               2377
+                                                               3952
                                                            ],
-                                                 "min_ms":  2377,
+                                                 "min_ms":  3952,
                                                  "errors":  0,
-                                                 "med_ms":  2377,
-                                                 "max_ms":  2377,
-                                                 "avg_ms":  2377
+                                                 "med_ms":  3952,
+                                                 "max_ms":  3952,
+                                                 "avg_ms":  3952
                                              },
                     "type_file":  {
                                       "n":  3,
                                       "times":  [
-                                                    456,
-                                                    399,
-                                                    495
+                                                    195,
+                                                    514,
+                                                    328
                                                 ],
-                                      "min_ms":  399,
+                                      "min_ms":  195,
                                       "errors":  0,
-                                      "med_ms":  456,
-                                      "max_ms":  495,
-                                      "avg_ms":  450
+                                      "med_ms":  328,
+                                      "max_ms":  514,
+                                      "avg_ms":  345.7
                                   },
                     "roundtrip_echo":  {
-                                           "n":  7,
+                                           "n":  4,
                                            "times":  [
-                                                         281,
-                                                         220,
-                                                         167,
-                                                         138,
-                                                         133,
-                                                         106,
-                                                         107
+                                                         158,
+                                                         82,
+                                                         90,
+                                                         76
                                                      ],
-                                           "min_ms":  106,
+                                           "min_ms":  76,
                                            "errors":  0,
-                                           "med_ms":  138,
-                                           "max_ms":  281,
-                                           "avg_ms":  164.6
+                                           "med_ms":  90,
+                                           "max_ms":  158,
+                                           "avg_ms":  101.5
                                        },
                     "roundtrip_cmd":  {
-                                          "n":  5,
+                                          "n":  3,
                                           "times":  [
-                                                        108,
-                                                        108,
-                                                        107,
-                                                        107,
-                                                        93
+                                                        139,
+                                                        93,
+                                                        139
                                                     ],
                                           "min_ms":  93,
                                           "errors":  0,
-                                          "med_ms":  107,
-                                          "max_ms":  108,
-                                          "avg_ms":  104.6
+                                          "med_ms":  139,
+                                          "max_ms":  139,
+                                          "avg_ms":  123.7
                                       },
                     "concurrency_10":  {
                                            "n":  1,
                                            "times":  [
-                                                         1163
+                                                         2666
                                                      ],
-                                           "min_ms":  1163,
+                                           "min_ms":  2666,
                                            "errors":  0,
-                                           "med_ms":  1163,
-                                           "max_ms":  1163,
-                                           "avg_ms":  1163
+                                           "med_ms":  2666,
+                                           "max_ms":  2666,
+                                           "avg_ms":  2666
                                        },
                     "result_read":  {
-                                        "n":  5,
+                                        "n":  3,
                                         "times":  [
-                                                      1.002,
-                                                      1.002,
                                                       0,
                                                       0,
-                                                      0.999
+                                                      0
                                                   ],
                                         "min_ms":  0,
                                         "errors":  0,
-                                        "med_ms":  1,
-                                        "max_ms":  1,
-                                        "avg_ms":  0.6
+                                        "med_ms":  0,
+                                        "max_ms":  0,
+                                        "avg_ms":  0
                                     },
                     "pipe_direct":  {
-                                        "n":  5,
+                                        "n":  3,
                                         "times":  [
-                                                      29,
-                                                      16,
-                                                      17,
-                                                      16,
-                                                      15
+                                                      21,
+                                                      12,
+                                                      14
                                                   ],
-                                        "min_ms":  15,
+                                        "min_ms":  12,
                                         "errors":  0,
-                                        "med_ms":  16,
-                                        "max_ms":  29,
-                                        "avg_ms":  18.6
+                                        "med_ms":  14,
+                                        "max_ms":  21,
+                                        "avg_ms":  15.7
                                     },
                     "v21_max_throughput":  {
                                                "n":  1,
                                                "times":  [
-                                                             2771
+                                                             7764
                                                          ],
-                                               "min_ms":  2771,
+                                               "min_ms":  7764,
                                                "errors":  0,
-                                               "med_ms":  2771,
-                                               "max_ms":  2771,
-                                               "avg_ms":  2771
+                                               "med_ms":  7764,
+                                               "max_ms":  7764,
+                                               "avg_ms":  7764
                                            },
                     "concurrency_5":  {
                                           "n":  1,
                                           "times":  [
-                                                        728
+                                                        2367
                                                     ],
-                                          "min_ms":  728,
-                                          "errors":  0,
-                                          "med_ms":  728,
-                                          "max_ms":  728,
-                                          "avg_ms":  728
-                                      }
-                },
-    "total_ok":  130,
-    "bridge_base":  "D:\\zebbingo\\tools\\claude-bridge"
-}
+                                          "min_ms":

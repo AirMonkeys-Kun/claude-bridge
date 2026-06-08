@@ -70,9 +70,80 @@ function Invoke-UserContextExecution {
     Log "[$CmdId] USER result written (exit=$userExit)"
 }
 
+function Invoke-MaintenanceCommand {
+    <#.SYNOPSIS Handle 'maintenance' type — set/clear/check maintenance lock in-process.#>
+    param([string]$CmdId, [string]$RawCmd, [datetime]$StartTime)
+
+    $lockPath = Join-Path (Split-Path $script:baseDir -Parent) "watcher\.maintenance.lock"
+    $action = ($RawCmd -replace '^\s*|\s*$', '').ToLower()
+    $exitCode = -1; $stdout = ""; $stderr = ""; $errorMsg = ""
+
+    if ($action -eq "enter" -or $action -eq "lock") {
+        $reason = if ($RawCmd -match 'reason=(.+)') { $Matches[1] } else { "manual" }
+        $ttl = if ($RawCmd -match 'ttl=(\d+)') { [int]$Matches[1] } else { 1800 }
+        $lockObj = @{
+            reason = $reason; started_at = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+            ttl = $ttl; pid = $pid
+        }
+        try {
+            $lockObj | ConvertTo-Json -Compress | Set-Content -Path $lockPath -NoNewline -Encoding UTF8
+            $stdout = "Maintenance lock SET (reason=$reason, ttl=${ttl}s)"
+            $exitCode = 0
+        } catch {
+            $stderr = "Failed to set lock: $_"
+            $errorMsg = $stderr
+        }
+    } elseif ($action -eq "exit" -or $action -eq "unlock" -or $action -eq "clear") {
+        try {
+            if (Test-Path $lockPath) { Remove-Item $lockPath -Force }
+            $stdout = "Maintenance lock CLEARED"
+            $exitCode = 0
+        } catch {
+            $stderr = "Failed to clear lock: $_"
+            $errorMsg = $stderr
+        }
+    } else {  # status / check
+        if (Test-Path $lockPath) {
+            try {
+                $lock = Get-Content $lockPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                $started = [DateTime]::ParseExact($lock.started_at, "yyyy-MM-dd HH:mm:ss", $null)
+                $age = [int]((Get-Date) - $started).TotalSeconds
+                $ttl = if ($lock.ttl) { $lock.ttl } else { 1800 }
+                if ($age -ge $ttl) {
+                    $stdout = "Maintenance lock EXPIRED (age=${age}s >= ttl=${ttl}s) — auto-cleared"
+                    Remove-Item $lockPath -Force -ErrorAction SilentlyContinue
+                } else {
+                    $stdout = "Maintenance lock ACTIVE (age=${age}s, ttl=${ttl}s, reason=$($lock.reason))"
+                }
+            } catch {
+                $stdout = "Maintenance lock CORRUPT — removing"
+                Remove-Item $lockPath -Force -ErrorAction SilentlyContinue
+            }
+        } else {
+            $stdout = "Maintenance lock: not set — recovery layers fully active"
+        }
+        $exitCode = 0
+    }
+
+    $result = New-CommandResult -CmdId $CmdId -ExitCode $exitCode `
+        -Stdout $stdout -Stderr $stderr -Error $errorMsg `
+        -DurationMs ([int]((Get-Date) - $StartTime).TotalMilliseconds)
+    if ($errorMsg) { $result.state = "error" }
+    Reset-QueueToIdle -Path $script:queueFile
+    Write-CommandResult -Result $result -Directory $script:baseDir
+    $script:inflight.Remove($CmdId)
+    Log "[$CmdId] MAINTENANCE command: $stdout"
+}
+
 function Invoke-InprocessFallback {
     <#.SYNOPSIS Execute command in-process when no worker is available.#>
     param([string]$CmdId, [string]$RawCmd, [string]$Ctype, [int]$Timeout)
+
+    # ── Maintenance type: handled directly, not executed as PowerShell ──
+    if ($Ctype -eq "maintenance") {
+        Invoke-MaintenanceCommand -CmdId $CmdId -RawCmd $RawCmd -StartTime (Get-Date)
+        return
+    }
 
     $subT0 = Get-Date
     $progressFile = Join-Path $script:baseDir "r_${CmdId}_progress.json"

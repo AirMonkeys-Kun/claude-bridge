@@ -33,6 +33,7 @@ $script:lockFile = Join-Path $script:watcherDir ".watcher.lock"
 $script:queueFile = Join-Path $script:watcherDir "queue.txt"
 $script:agentScript = Join-Path $script:bridgeBase "bridge_agent.py"
 $script:agentPort = 19850
+$script:maintenanceLock = Join-Path $script:watcherDir ".maintenance.lock"
 
 # ── Module imports (BridgeCommon) ──
 Import-Module (Join-Path $script:modulesDir "BridgeCommon.psm1") -Force
@@ -55,6 +56,37 @@ $script:heartbeatStaleSeconds = 120
 $script:guardianRunCount = 0
 $script:lastWorkerDeployTime = $null  # tracks when workers were last deployed (avoids false startup alerts)
 # log rotation handled by Invoke-LogRotation from BridgeCommon (500 lines)
+
+# ── Maintenance lock protocol ──
+function Test-MaintenanceLock {
+    <#
+     Checks whether a maintenance lock exists and is still valid.
+     Returns $true if locked (skip all recovery), $false if clear to act.
+     Locks with expired TTL are treated as stale and auto-cleared.
+    #>
+    $lockPath = $script:maintenanceLock
+    if (-not (Test-Path $lockPath)) { return $false }
+    try {
+        $lock = Read-Json $lockPath
+        if (-not $lock -or -not $lock.started_at) {
+            Remove-Item $lockPath -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+        $ttl = if ($lock.ttl) { $lock.ttl } else { 1800 }
+        $started = [DateTime]::ParseExact($lock.started_at, "yyyy-MM-dd HH:mm:ss", $null)
+        $age = [int]((Get-Date) - $started).TotalSeconds
+        if ($age -ge $ttl) {
+            Log "Maintenance lock EXPIRED ($age`s >= $ttl`s) — clearing"
+            Remove-Item $lockPath -Force -ErrorAction SilentlyContinue
+            return $false
+        }
+        Log "Maintenance lock ACTIVE (age=$age`s, ttl=$ttl`s, reason=$($lock.reason)) — skipping recovery"
+        return $true
+    } catch {
+        Remove-Item $lockPath -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+}
 
 # ── Worker type definitions (matching worker_factory.ps1) ──
 $script:workerTypes = @(
@@ -209,20 +241,33 @@ function Invoke-KillAllBridgeProcesses {
 function Invoke-CleanArtifacts {
     Log "ACTION: Cleaning stale artifacts..."
 
-    # Watcher artifacts
-    foreach ($f in @(".watcher.lock", ".watcher_heartbeat", ".graceful_restart")) {
+    # Watcher artifacts (lock files, NOT result files)
+    foreach ($f in @(".watcher.lock", ".watcher_heartbeat", ".graceful_restart", ".maintenance.lock")) {
         $path = Join-Path $script:watcherDir $f
         if (Test-Path $path) { Remove-Item $path -Force; Log "  DEL watcher\$f" }
     }
-    # Stale result files
-    Get-ChildItem "$($script:watcherDir)\r_*.json" -ErrorAction SilentlyContinue | ForEach-Object {
-        Remove-Item $_.FullName -Force
-    }
-    Log "  Cleaned watcher result files"
+    # Result files are PRESERVED — deleting them loses in-flight task results.
+    # Only clean if they're truly orphaned (no corresponding pending cmd).
 
-    # Reset queue
-    Write-Text -path $script:queueFile -content (Get-IdleQueueJson)
-    Log "  Queue reset to idle"
+    # Reset queue only if corrupt (not valid JSON or stuck in running with no watcher)
+    $idleJson = Get-IdleQueueJson
+    $resetQueue = $false
+    try {
+        $queueContent = Read-Text $script:queueFile
+        if ($queueContent) {
+            $parsed = $queueContent | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if (-not $parsed) {
+                $resetQueue = $true
+                Log "  Queue corrupt (invalid JSON) — resetting"
+            }
+        }
+    } catch { $resetQueue = $true }
+    if ($resetQueue) {
+        Write-Text -path $script:queueFile -content $idleJson
+        Log "  Queue reset to idle"
+    } else {
+        Log "  Queue OK — preserving content"
+    }
 
     # Worker artifacts
     $pool = Read-Json $script:poolFile
@@ -400,6 +445,14 @@ function Invoke-GuardianCheck {
     $script:guardianRunCount++
     Log "=== Guardian check #$($script:guardianRunCount) ==="
 
+    # ── Step 0: Maintenance lock check ──
+    # If a maintenance lock is active, skip ALL recovery actions.
+    # This prevents guardian from overwriting in-progress upgrades.
+    if (Test-MaintenanceLock) {
+        Log "Maintenance lock active — skipping this cycle entirely"
+        return
+    }
+
     # ── Step 1: Check watcher status ──
     $watcherStatus = Get-WatcherStatus
     Log "Watcher status: $watcherStatus"
@@ -468,7 +521,43 @@ function Invoke-GuardianCheck {
     } catch { }
 
     if (-not $agentAlive -and (Test-Path $script:agentScript)) {
-        Log "BridgeAgent: DOWN — port $($script:agentPort) not listening, restarting..."
+        # ── Anti-flap: backoff if bridge_agent keeps dying ──
+        $restartTracker = Join-Path $script:watcherDir ".agent_restart_tracker.json"
+        $backoff = 1
+        try {
+            $tracker = Read-Json $restartTracker
+            if ($tracker -and $tracker.count -gt 0) {
+                $lastAttempt = if ($tracker.last_attempt) {
+                    [DateTime]::ParseExact($tracker.last_attempt, "yyyy-MM-dd HH:mm:ss", $null)
+                } else { (Get-Date).AddSeconds(-60) }
+                $sinceLast = [int]((Get-Date) - $lastAttempt).TotalSeconds
+                if ($sinceLast -lt 120) {
+                    # Multiple failures within 2 min — apply backoff
+                    $backoff = [Math]::Min([Math]::Pow(2, $tracker.count), 30)
+                    Log "BridgeAgent: anti-flap backoff ${backoff}s (restart #$($tracker.count) in last ${sinceLast}s)"
+                    Start-Sleep -Seconds $backoff
+                } else {
+                    # Last failure was long ago — reset counter
+                    $tracker.count = 0
+                }
+            }
+        } catch {}
+        # Track this attempt
+        $newCount = 1
+        try {
+            $tracker = Read-Json $restartTracker
+            $prevCount = if ($null -ne $tracker -and $null -ne $tracker.count) { $tracker.count } else { 0 }
+            $newCount = $prevCount + 1
+        } catch {
+            $newCount = 1
+        }
+        try {
+            Write-Text -path $restartTracker -content (ConvertTo-Json -Compress @{
+                count = $newCount; last_attempt = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+            })
+        } catch {}
+
+        Log "BridgeAgent: DOWN — port $($script:agentPort) not listening, restarting... (attempt #$newCount)"
         try {
             $agentLogStdout = Join-Path $script:watcherDir "bridge_agent_stdout.log"
             $agentLogStderr = Join-Path $script:watcherDir "bridge_agent_stderr.log"
@@ -483,6 +572,8 @@ function Invoke-GuardianCheck {
                 $verify = Get-NetTCPConnection -LocalPort $script:agentPort -State Listen -ErrorAction SilentlyContinue
                 if ($verify) {
                     Log "  BridgeAgent restarted OK (pid=$($verify.OwningProcess))"
+                    # Reset counter on successful restart
+                    try { Write-Text -path $restartTracker -content "{`"count`":0,`"last_attempt`":`"$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`"}" } catch {}
                 } else {
                     Log "  WARNING: BridgeAgent still not listening after restart"
                 }

@@ -39,4 +39,18 @@ TYPE_MAP = {
     "process": "process", "system": "system",
 }
 
-# ── Watchdog ────────────────────────────────�
+# ── Watchdog ────────────────────────────────────────────────────────────
+WATCHDOG_CHECK_INTERVAL = 60       # seconds between watchdog checks
+WATCHDOG_STALE_SECONDS = 120       # watcher heartbeat stale threshold
+WATCHDOG_PARENT_CHECK_INTERVAL = 30  # seconds between parent-PID checks
+
+# ── Health HTTP server ──────────────────────────────────────────────────
+HEALTH_PORT = 19851                 # /health HTTP endpoint port
+
+# ── Shared state ───────────────────────────────────────────────────────
+queue_serial = threading.Lock()       # serializes queue.txt commands
+active_connections = 0
+active_lock = threading.Lock()
+_worker_pool = None
+_pool_load_time = 0
+_pool_lock = threading.Lock()

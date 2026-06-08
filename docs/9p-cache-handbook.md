@@ -1,6 +1,6 @@
 # 9P/virtiofs 缓存问题研究与解决方案
 
-> 最后更新：2026-06-06 | 版本：V2.0
+> 最后更新：2026-06-07 | 版本：V3.0
 
 ---
 
@@ -15,6 +15,7 @@
 7. [旧约定为何需要更新](#7-旧约定为何需要更新)
 8. [快速决策树](#8-快速决策树)
 9. [变更记录](#9-变更记录)
+10. [Memory/Config 文件陷阱（V3.0 新发现）](#10-memoryconfig-文件陷阱v30-新发现)
 
 ---
 
@@ -44,6 +45,7 @@ Linux VM (Claude)                     Windows Host
 | VM 读 r_{cid}.json 结果 | 读延迟 200-600ms（V18 已修复） |
 | VM 读 .watcher_heartbeat | 看到旧时间戳，误判 watcher 死亡 |
 | VM 写 .watcher_heartbeat | watcher 正常写入，不受影响（写入方是 Windows 进程） |
+| **VM 写 memory/配置文件 → 系统读取** | **V3.0 新发现：写入永不到达 Windows，系统看到旧内容** |
 
 ---
 
@@ -206,18 +208,41 @@ Windows: 收到 rename → 看到新文件
 | Python `os.fsync()` | 强制 9P flush | 部分有效（延迟从 30s 降到 10s） |
 | 内核 `fsync` 命令 | bash 没有内置 fsync | 需通过 Python/C 实现 |
 
-### 唯一稳定的变通
+### 唯一稳定修复：fsync
 
 通过 Python 的 `os.fsync(fd)` 对 9P 挂载的文件描述符进行强制刷写：
 
 ```python
-with open(queue_path, 'w') as f:
+with open(queue_path, 'w', encoding='utf-8') as f:
     f.write(json.dumps(cmd))
     f.flush()
     os.fsync(f.fileno())  # 强制 9P flush 到服务器
 ```
 
-但这仍然是 hack，不是根因修复。
+**实测验证**：fsync 后 39ms Windows 可见。无 fsync 则不可预测（有时 17ms 巧合刷新，有时永不到达）。
+
+### 修复清单（V3.0）
+
+| 文件 | 修复内容 | 验证 |
+|------|---------|------|
+| `bridge_client.py` | `file_send_command()` 添加 `f.flush()` + `os.fsync()` | ✅ 39ms 到 Windows |
+| `watcher/queue_send.py` | 添加 fsync，修复 encoding ascii→utf8 | ✅ |
+| `bridge_fsync.py` | 新增通用 fsync 工具（单文件/目录/syncfs） | ✅ 已验证 |
+
+### 注意：fsync 能解决"文件到达 Windows"，但不解决 FSW 触发
+
+FileSystemWatcher 在 Windows 侧监控文件变化，但 FUSE 写入不触发 Windows 的 ReadDirectoryChangesW API。这是 virtiofs/9P 协议层的限制，无法在 VM 侧修复。
+
+这意味着：
+- ✅ fsync 保证 queue.txt 内容**在 Windows 上存在**（watcher 轮询可读到）
+- ❌ fsync **不能触发** watcher 的 FileSystemWatcher 事件
+- 备用路径需要 watcher 定期轮询 queue.txt（已实现 500ms 间隔）
+
+备用路径的完整工作条件：
+1. VM 写 queue.txt 并 fsync → 文件到达 Windows
+2. Watcher 轮询检查（非 FSW）→ 检测到 state=pending
+3. Watcher 执行命令 → 写 r_{cid}.json 结果
+4. bridge_client.py 轮询读取 r_{cid}.json → 返回结果
 
 ---
 
@@ -330,38 +355,4 @@ bridge-only-workflow: 禁止使用 mcp__workspace__bash，一切通过 queue.txt
    │
    ├─ 从 VM 侧 (Claude 沙箱)
    │    │
-   │    ├─ ✓ TCP 可用 → bridge_client.py（推荐，0.8ms，无缓存）
-   │    │
-   │    └─ TCP 不可用 → queue.txt + 使用 Python os.fsync()
-   │                     （避免 9P write-back 缓存）
-   │
-   ├─ 从 Windows 侧（PowerShell 脚本）
-   │    │
-   │    ├─ 写 queue.txt → 直接 Write-SafeFile（Windows 侧不受 9P 影响）
-   │    └─ 写结果文件 → Write-CommandResult（自动 temp+rename）
-   │
-   └─ 从 VM 侧读取结果
-        │
-        └─ r_{cmd_id}.json → 唯一文件名，自然绕过 9P 读缓存
-                             （V18 已验证 <25ms）
-```
-
----
-
-## 9. 变更记录
-
-| 日期 | 版本 | 变更 |
-|------|------|------|
-| 2026-06-06 | V1.0 | 初始版本 — V18 唯一文件名方案总结 |
-| 2026-06-06 | V2.0 | 新增写缓存分析、Write-SafeFile 原子写、TCP 终极方案、决策树、旧约定更新 |
-
----
-
-**相关文档**：
-- `EVOLUTION.md` — V18 节（唯一文件名方案）和 V22 节（Phase 3 TCP 迁移）
-- `TCP-MIGRATION-PLAN.md` — TCP 迁移完整方案和验证数据
-- `dual-bridge-architecture.md` — 双桥架构总览（Phase 3 已完成）
-- `modules/BridgeCommon.psm1` — Write-SafeFile 和 Write-Heartbeat 的 temp+rename 实现
-- `bridge_client.py` — VM 侧 TCP 客户端（标准用法）
-- `bridge_agent.py` — Windows 侧 TCP 服务端
-- `powershell-best-practices.md` — 第 3 节（文件 I/O 编码）和第 4 节（模块编写）
+   │    ├�

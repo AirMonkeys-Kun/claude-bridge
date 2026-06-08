@@ -521,4 +521,168 @@ if ($psObj.property -eq $value) { }  # ✅ 安全
 ### 安全模式
 ```powershell
 # 对于不确定类型的变量，先检查
-if ($
+if ($obj -is [hashtable]) {
+    # 用哈希表的方式访问
+    $obj["key"]
+} elseif ($obj -is [PSCustomObject]) {
+    # 用属性的方式访问
+    $obj.property
+}
+```
+
+### $null 判断
+```powershell
+# 推荐：把 $null 放在左边
+if ($null -eq $var) { }  # ✅
+if ($var -eq $null) { }  # 也可以但可能触发类型转换
+
+# 特别注意：数组为空不是 $null
+$arr = @()
+$null -eq $arr       # → $false
+$arr.Count -eq 0     # → $true
+
+# 安全的存在性检查
+if ($var) { }         # 非 $null、非空、非 0、非 $false → true
+if (-not $var) { }    # 取反
+```
+
+---
+
+## 10. 数组与 += 操作
+
+### 性能问题
+```powershell
+# ❌ 低效：每次 += 创建新数组
+$result = @()
+foreach ($item in $collection) {
+    $result += $item  # 每次复制整个数组！
+}
+
+# ✅ 高效：用 ArrayList 或 List
+[System.Collections.ArrayList]$list = @()
+foreach ($item in $collection) {
+    [void]$list.Add($item)
+}
+
+# ✅ 或直接用 PowerShell 集合
+$list = [System.Collections.Generic.List[object]]::new()
+foreach ($item in $collection) {
+    $list.Add($item)
+}
+```
+
+### 类型混杂的数组
+```powershell
+$arr = @()
+$arr += "string"           # [string[]] → ok
+$arr += @{key="value"}     # 混入 HashTable → ok
+$arr += [PSCustomObject]@{p="v"}  # 混入 PSObject → ok
+
+# 但如果 arr 被强类型约束
+[string[]]$typed = @()
+$typed += "string"         # ✅
+$typed += 42               # 自动转 "42"
+$typed += @{key="value"}   # ❌ 无法转换
+```
+
+---
+
+## 11. HashTable 枚举中修改
+
+### 禁止模式
+```powershell
+$ht = @{a=1; b=2; c=3}
+
+# ❌ 错误：枚举过程中修改
+foreach ($key in $ht.Keys) {
+    if ($condition) { $ht.Remove($key) }  # 运行时异常！
+}
+```
+
+### 正确模式
+```powershell
+# ✅ 先把要移除的收集起来，完了再移除
+$toRemove = @()
+foreach ($key in $ht.Keys) {
+    if ($condition) { $toRemove += $key }
+}
+foreach ($key in $toRemove) {
+    $ht.Remove($key)
+}
+
+# ✅ 或者复制 Keys
+foreach ($key in @($ht.Keys)) {
+    if ($condition) { $ht.Remove($key) }
+}
+```
+
+---
+
+## 12. 错误处理模式
+
+### 推荐的日志安全模式
+```powershell
+# 任何可能出错的代码都包 try/catch
+try {
+    Some-Operation
+} catch {
+    # catch 块内部也要安全
+    try {
+        Log "Error: $($_.Exception.Message)"
+    } catch {
+        # 日志失败也不能抛异常
+    }
+}
+```
+
+### 命令执行结果处理的推荐模式
+```powershell
+$toRemove = @()
+foreach ($item in $items) {
+    try {
+        $result = Process-Item $item
+        try {
+            Log-Result $result  # 次要用 try/catch
+        } catch {
+            Log "Logging failed: $($_.Exception.Message)"
+        }
+        $toRemove += $item.Id
+    } catch {
+        Log "Item $item failed: $($_.Exception.Message)"
+        # 即使失败也标记为已处理（避免阻塞队列）
+        $toRemove += $item.Id
+    }
+}
+# 清理
+foreach ($id in $toRemove) { Remove-Item $id }
+```
+
+### New-CommandResult 模式（Bridge 项目）
+```powershell
+# 统一的结果对象
+$result = New-CommandResult -CmdId $cid -ExitCode 0 -Stdout "OK"
+Write-CommandResult -Result $result -Directory $script:baseDir
+```
+
+---
+
+## 附录：Bridge 项目经验对照表
+
+| 问题 | 文件 | 修复 PR/提交 |
+|------|------|-------------|
+| UTF-8 BOM 导致模块加载失败 | `BridgeRules.psm1` | 转为 UTF-8 with BOM |
+| Hashtable 混入 PSObject 数组 | `BridgeRules.psm1` | `@{}` → `[PSCustomObject]@{}` |
+| `param()` 内反引号转义 | `watcher.ps1` | 移除 ` 转义 |
+| `${function:Name}` 作用域 | `BridgeRules.psm1` | 改为 `function` 关键字 + Export |
+| 单条 inflight 崩溃阻塞清理 | `watcher.ps1` | 每条 item 独立 try/catch |
+| `$script:lastCmdId` 预处理前赋值 | `watcher.ps1` | 移到预处理成功后 |
+| 9P 缓存导致文件不同步 | VM 挂载 | 用 Read 工具而非 bash 读取 |
+| Housekeeping 崩溃导致主循环停摆 | `watcher.ps1` | 每条 housekeeping 独立 try/catch |
+| `Import-Module -Force` 在 dot-source 中破坏绑定 | `lib/common.ps1` → 移入 `watcher.ps1` | 集中 Import-Module 在 dot-source 之前 |
+| Log 函数双写（AppendAllText + Write-BridgeLog） | `lib/logging.ps1` | 移除 Write-BridgeLog 调用，保持单写入者 |
+
+---
+
+> **最后更新**: 2026-06-06  
+> **适用范围**: PowerShell 5.0 (Windows)  
+> **参考**: [Microsoft PowerShell 5.0 文档](https://docs.microsoft.com/en-us/powershell/scripting/powershell-scripting?view=powershell-5.1)

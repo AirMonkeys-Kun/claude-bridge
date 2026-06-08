@@ -32,7 +32,8 @@ param(
     [string]$BridgeBase = "",
     [switch]$KillAll,
     [switch]$List,
-    [switch]$DeployAll
+    [switch]$DeployAll,
+    [switch]$FromConfig
 )
 
 if (-not $BridgeBase) {
@@ -108,30 +109,28 @@ if ($KillAll) {
 if ($DeployAll) {
     Log "=== DeployAll: creating 14 workers across 6 types, atomic pool write ==="
 
-    # Kill all existing workers first
-    Log "Killing all existing workers..."
-    $existingPool = Read-Pool
-    if ($existingPool -and $existingPool.workers) {
-        foreach ($w in $existingPool.workers) {
-            try { Stop-Process -Id $w.pid -Force -ErrorAction SilentlyContinue } catch {}
+    # Read config if -FromConfig specified
+    $configFile = Join-Path $clusterDir "worker-config.json"
+    if ($FromConfig -and (Test-Path $configFile)) {
+        Log "Reading deploy plan from $configFile"
+        $config = Get-Content $configFile -Raw | ConvertFrom-Json
+        $deployPlan = @()
+        foreach ($item in $config.deploy_plan) {
+            $deployPlan += @{type=$item.type; count=$item.count; pipe_prefix=$item.pipe_prefix}
         }
+        Log "  Loaded $($deployPlan.Count) types from config"
+    } else {
+        # Hardcoded fallback (original behavior)
+        Log "Using hardcoded deploy plan (use -FromConfig to read worker-config.json)"
+        $deployPlan = @(
+            @{type="generic"; count=6},
+            @{type="file"; count=4},
+            @{type="process"; count=2},
+            @{type="system"; count=2},
+            @{type="wsl"; count=1},
+            @{type="user"; count=1}
+        )
     }
-    # Also kill orphaned worker_generic processes
-    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object {
-        $_.CommandLine -like "*worker_generic*"
-    } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-    Start-Sleep -Seconds 1
-    Log "  All killed"
-
-    # Define deploy plan
-    $deployPlan = @(
-        @{type="generic"; count=6},
-        @{type="file"; count=4},
-        @{type="process"; count=2},
-        @{type="system"; count=2},
-        @{type="wsl"; count=1},
-        @{type="user"; count=1}
-    )
 
     $allWorkers = @()
 

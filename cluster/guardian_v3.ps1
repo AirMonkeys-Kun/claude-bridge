@@ -630,4 +630,118 @@ function Invoke-GuardianCheck {
         try {
             $hbText = Read-Text $userHbFile
             if ($hbText) {
-                $hbTim
+                $hbTime = [DateTime]::ParseExact($hbText, "yyyy-MM-dd HH:mm:ss.fff", $null)
+                $hbAge = [int]((Get-Date) - $hbTime).TotalSeconds
+                if ($hbAge -gt 300) {
+                    Log "user_bridge: heartbeat stale (${hbAge}s > 300s) — marking dead"
+                    $userBridgeDead = $true
+                } else {
+                    Log "user_bridge: alive (heartbeat ${hbAge}s ago)"
+                }
+            }
+        } catch {
+            Log "user_bridge: heartbeat unparseable — marking dead"
+            $userBridgeDead = $true
+        }
+    } else {
+        # No heartbeat file at all — might be initial startup
+        # Check if lock file exists as a stronger signal
+        if (Test-Path $userLockFile) {
+            Log "user_bridge: no heartbeat but lock exists — checking PID"
+            try {
+                $lockPid = [int]((Read-Text $userLockFile).Trim())
+                $lockProc = Get-Process -Id $lockPid -ErrorAction SilentlyContinue
+                if (-not $lockProc) {
+                    Log "user_bridge: lock PID $lockPid dead — marking dead"
+                    $userBridgeDead = $true
+                } else {
+                    Log "user_bridge: lock PID $lockPid alive (no heartbeat yet)"
+                }
+            } catch {
+                Log "user_bridge: lock file corrupt — marking dead"
+                $userBridgeDead = $true
+            }
+        } else {
+            # No heartbeat, no lock — worker never started or crashed cleanly
+            Log "user_bridge: no heartbeat, no lock — marking dead"
+            $userBridgeDead = $true
+        }
+    }
+
+    if ($userBridgeDead) {
+        Log "user_bridge: RESTARTING..."
+        # Kill stale lock PID if alive
+        if (Test-Path $userLockFile) {
+            try {
+                $lockPid = [int]((Read-Text $userLockFile).Trim())
+                Stop-Process -Id $lockPid -Force -ErrorAction SilentlyContinue
+                Log "  Killed stale user_bridge PID=$lockPid"
+            } catch {}
+        }
+        # Remove started flag so runner.ps1 allows launch
+        if (Test-Path $userStartedFlag) {
+            Remove-Item $userStartedFlag -Force -ErrorAction SilentlyContinue
+            Log "  Removed .user_bridge_started flag"
+        }
+        # Reset queue
+        $userQueue = Join-Path $userBridgeDir "queue.txt"
+        if (Test-Path $userQueue) {
+            Write-Text -path $userQueue -content '{"v":3,"state":"idle"}'
+            Log "  Reset user_bridge queue to idle"
+        }
+        # Launch runner
+        if (Test-Path $userRunnerScript) {
+            try {
+                $runPsi = New-Object System.Diagnostics.ProcessStartInfo
+                $runPsi.FileName = "powershell.exe"
+                $runPsi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$userRunnerScript`""
+                $runPsi.UseShellExecute = $false
+                $runPsi.RedirectStandardOutput = $true
+                $runPsi.RedirectStandardError = $true
+                $runPsi.CreateNoWindow = $true
+                $runProc = [System.Diagnostics.Process]::Start($runPsi)
+                if ($runProc) {
+                    # Wait synchronously for runner to finish (compile + launch attempt)
+                    $runProc.WaitForExit(15000) | Out-Null
+                    $runnerExitCode = $runProc.ExitCode
+                    $runnerStderr = $runProc.StandardError.ReadToEnd().Trim()
+                    $runProc.Dispose()
+                    Log "  runner.ps1 exit=$runnerExitCode stderr=$runnerStderr"
+                    # Give worker a moment to write heartbeat
+                    Start-Sleep -Seconds 3
+                    $verifyHb = Read-Text $userHbFile -ErrorAction SilentlyContinue
+                    if ($verifyHb) {
+                        Log "  user_bridge worker heartbeat confirmed: $verifyHb"
+                    } else {
+                        Log "  WARNING: user_bridge worker not started — runner exit=$runnerExitCode"
+                        if ($runnerStderr) { Log "  runner stderr: $runnerStderr" }
+                    }
+                }
+            } catch {
+                Log "  ERROR launching user_bridge: $($_.Exception.Message)"
+            }
+        } else {
+            Log "  ERROR: runner.ps1 not found at $userRunnerScript"
+        }
+    }
+
+    Log "=== Guardian check #$($script:guardianRunCount) complete ==="
+}
+
+# ============================================================
+# Entry point
+# ============================================================
+
+try {
+    # Ensure log directory exists
+    $logDir = Split-Path $script:logFile -Parent
+    if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
+
+    Invoke-GuardianCheck
+} catch {
+    $ex = $_.Exception.ToString()
+    Log "FATAL: Unhandled exception: $ex"
+    exit 1
+}
+
+exit 0

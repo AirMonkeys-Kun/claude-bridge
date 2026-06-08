@@ -27,6 +27,7 @@ $csCode = @'
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Diagnostics;
 
 public class LaunchUser {
     [DllImport("kernel32.dll")] static extern uint WTSGetActiveConsoleSessionId();
@@ -43,6 +44,7 @@ public class LaunchUser {
     [DllImport("advapi32.dll")] static extern bool LookupPrivilegeValueW(string lpSystemName, string lpName, out LUID lpLuid);
     [DllImport("advapi32.dll")] static extern bool AdjustTokenPrivileges(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
     [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint dwDesiredAccess, bool bInheritHandle, uint dwProcessId);
 
     enum SECURITY_IMPERSONATION_LEVEL { SecurityAnonymous, SecurityIdentification, SecurityImpersonation, SecurityDelegation }
     enum TOKEN_TYPE { TokenPrimary = 1, TokenImpersonation }
@@ -54,10 +56,27 @@ public class LaunchUser {
 
     const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
     const uint TOKEN_QUERY = 0x0008;
+    const uint TOKEN_DUPLICATE = 0x0002;
     const uint SE_PRIVILEGE_ENABLED = 0x00000002;
     const uint CREATE_NO_WINDOW = 0x08000000;
     const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
     const uint INFINITE = 0xFFFFFFFF;
+    const uint PROCESS_QUERY_INFORMATION = 0x0400;
+    const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+    // ── Helper: find explorer.exe PIDs (fallback token source) ──
+    static int[] GetExplorerPids() {
+        try {
+            Process[] procs = Process.GetProcessesByName("explorer");
+            if (procs.Length == 0) return new int[0];
+            int[] result = new int[procs.Length];
+            for (int i = 0; i < procs.Length; i++) { result[i] = procs[i].Id; procs[i].Dispose(); }
+            Array.Sort(result); // lowest PID first (oldest session)
+            return result;
+        } catch {
+            return new int[0];
+        }
+    }
 
     static int Main(string[] args) {
         if (args.Length < 2) { Console.Error.WriteLine("Usage: launch_user.exe <exe> <args>"); return 1; }
@@ -81,12 +100,45 @@ public class LaunchUser {
                 }
             }
 
-            // Get user token
-            uint sessionId = WTSGetActiveConsoleSessionId();
-            if (sessionId == 0xFFFFFFFF) { Console.Error.WriteLine("No active session"); return 1; }
+            // ── Get user token: try WTSQueryUserToken first, fallback to explorer.exe ──
+            IntPtr hUserToken = IntPtr.Zero;
+            string tokenMethod = "";
 
-            IntPtr hUserToken;
-            if (!WTSQueryUserToken(sessionId, out hUserToken)) { Console.Error.WriteLine("WTSQueryUserToken failed: " + GetLastError()); return 1; }
+            // Method 1: WTSQueryUserToken (active console session)
+            uint sessionId = WTSGetActiveConsoleSessionId();
+            if (sessionId != 0xFFFFFFFF) {
+                if (WTSQueryUserToken(sessionId, out hUserToken)) {
+                    tokenMethod = "WTSQueryUserToken";
+                } else {
+                    Console.Error.WriteLine("WTSQueryUserToken failed (" + GetLastError() + "), trying fallback...");
+                }
+            } else {
+                Console.Error.WriteLine("No active console session, trying fallback...");
+            }
+
+            // Method 2: OpenProcessToken on explorer.exe
+            if (hUserToken == IntPtr.Zero) {
+                int[] explorerPids = GetExplorerPids();
+                foreach (int pid in explorerPids) {
+                    IntPtr hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_QUERY_INFORMATION, false, (uint)pid);
+                    if (hProc != IntPtr.Zero) {
+                        IntPtr hTestToken;
+                        if (OpenProcessToken(hProc, TOKEN_DUPLICATE | TOKEN_QUERY, out hTestToken)) {
+                            hUserToken = hTestToken;
+                            tokenMethod = "OpenProcessToken(explorer.exe PID=" + pid + ")";
+                            CloseHandle(hProc);
+                            break;
+                        }
+                        CloseHandle(hProc);
+                    }
+                }
+            }
+
+            if (hUserToken == IntPtr.Zero) {
+                Console.Error.WriteLine("All token acquisition methods failed");
+                return 1;
+            }
+            Console.Error.WriteLine("Token acquired via: " + tokenMethod);
 
             // Duplicate as primary
             IntPtr hPrimaryToken;

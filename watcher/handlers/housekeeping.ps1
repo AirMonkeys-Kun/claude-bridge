@@ -42,6 +42,9 @@ function Invoke-Housekeeping {
     <#.SYNOPSIS Periodic cleanup tasks (~every 60s)#>
     param([int]$Counter)
     if ($Counter % 300 -eq 0) {
+        # Dedup store cleanup (expire old entries)
+        try { Invoke-ContentDedupCleanup } catch { Log "[HOUSEKEEP] ContentDedup cleanup error: $($_.Exception.Message)" }
+
         Clean-HostLoopMode
         Assert-GuardianTask
 
@@ -138,11 +141,4 @@ function Invoke-Housekeeping {
             if ($legacyWorkers) {
                 foreach ($w in $legacyWorkers) {
                     Log "[HOUSEKEEP] Killing legacy _bridge worker: PID=$($w.ProcessId) cmd=$($w.CommandLine.Substring(0, [Math]::Min(120, $w.CommandLine.Length)))"
-                    try { Stop-Process -Id $w.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
-                }
-            }
-        } catch {
-            Log "[HOUSEKEEP] Legacy worker cleanup error: $($_.Exception.Message)"
-        }
-    }
-}
+                    try { Stop-Process -Id $w.ProcessId -Force -ErrorAction Sile

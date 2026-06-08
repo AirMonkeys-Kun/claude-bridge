@@ -83,4 +83,100 @@ function Get-WorkerForType {
 
     # Phase 0: Get all workers of the target type, filtered by PID alive
     $candidates = @($pool.workers | Where-Object {
-        $_.type -eq $targetType -and (Get-Proces
+        $_.type -eq $targetType -and (Get-Process -Id $_.pid -ErrorAction SilentlyContinue)
+    })
+
+    # Phase 1: Fallback to generic if target type has no live PIDs
+    if ($candidates.Count -eq 0 -and $targetType -ne "generic") {
+        Log "[DISPATCH] No '$targetType' worker — falling back to generic"
+        $candidates = @($pool.workers | Where-Object {
+            $_.type -eq "generic" -and (Get-Process -Id $_.pid -ErrorAction SilentlyContinue)
+        })
+    }
+
+    if ($candidates.Count -eq 0) { return $null }
+
+    # Phase 2: Remove busy workers (currently have an inflight command)
+    $busyWorkerIds = @($script:inflight.Values | ForEach-Object { $_.worker.id })
+    $available = @($candidates | Where-Object { $_.id -notin $busyWorkerIds })
+    if ($available.Count -gt 0) { $candidates = $available }
+
+    # Phase 3: Remove dead/degraded workers from health registry
+    $healthyCandidates = @($candidates | Where-Object {
+        $h = $script:workerHealth[$_.id]
+        -not $h -or $h.status -eq "healthy" -or $h.status -eq $null
+    })
+    if ($healthyCandidates.Count -gt 0) { $candidates = $healthyCandidates }
+
+    # Phase 4: Pre-flight pipe health check on selected worker (skip if already verified this cycle)
+    $preferred = $null
+    $idx = [Math]::Max(0, $script:workerRR[$targetType])
+    for ($attempt = 0; $attempt -lt $candidates.Count; $attempt++) {
+        $w = $candidates[($idx + $attempt) % $candidates.Count]
+        # Skip if recently verified (< 5s ago)
+        $h = $script:workerHealth[$w.id]
+        if ($h -and $h.status -eq "healthy" -and $h.last_seen_healthy) {
+            $lastSeen = [DateTime]::ParseExact($h.last_seen_healthy, "yyyy-MM-dd HH:mm:ss.fff", $null)
+            if (((Get-Date) - $lastSeen).TotalSeconds -lt 5) {
+                $preferred = $w
+                break
+            }
+        }
+        if (Test-WorkerPipeHealth -PipeName $w.pipe -WorkerId $w.id) {
+            $preferred = $w
+            break
+        }
+        Log "[DISPATCH] $($w.id) pipe unresponsive — skipping"
+    }
+
+    if (-not $preferred) {
+        Log "[DISPATCH] No healthy $targetType worker available — returning best effort"
+        $preferred = $candidates[$idx % $candidates.Count]
+    }
+
+    # Advance round-robin pointer past the selected worker
+    $script:workerRR[$targetType] = ($idx + 1) % $candidates.Count
+    return $preferred
+}
+
+function Dispatch-ToWorker {
+    param([string]$cid, [string]$ctype, [string]$cmd, [int]$timeout)
+
+    # Dedup: reject if this cmd_id is already inflight (defense against FSW double-fire + inflight race)
+    if ($script:inflight.ContainsKey($cid)) {
+        $existing = $script:inflight[$cid]
+        Log "[$cid] ALREADY INFLIGHT on $($existing.worker.id) — skipping duplicate dispatch"
+        return $null
+    }
+
+    $worker = Get-WorkerForType -ctype $ctype
+    if (-not $worker) {
+        Log "[$cid] No worker available for type '$ctype'"
+        return $null
+    }
+
+    try {
+        $pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", $worker.pipe, [System.IO.Pipes.PipeDirection]::InOut)
+        $pipe.Connect(300)
+        $reader = New-Object System.IO.StreamReader($pipe, $script:utf8)
+        $writer = New-Object System.IO.StreamWriter($pipe, $script:utf8)
+        $writer.AutoFlush = $true
+
+        $cmdJson = @{cmd_id=$cid; command=$cmd; type=$ctype; timeout=$timeout} | ConvertTo-Json -Compress
+        $writer.WriteLine($cmdJson)
+
+        $ackTask = $reader.ReadLineAsync()
+        $gotAck = $ackTask.Wait(100)
+
+        $pipe.Close()
+        if ($gotAck) {
+            Log "[$cid] DISPATCH to $($worker.id) — ACK received"
+        } else {
+            Log "[$cid] DISPATCH to $($worker.id) — sent (no ACK, assumed delivered)"
+        }
+        return $worker
+    } catch {
+        Log "[$cid] DISPATCH to $($worker.id) failed: $($_.Exception.Message)"
+        return $null
+    }
+}

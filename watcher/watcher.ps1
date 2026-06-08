@@ -121,6 +121,8 @@ while ($true) {
         $queue = Read-Json -path $script:queueFile
         if (-not $queue -or $queue.state -ne "pending") {
             $script:queueWatcher.WaitForChanged([System.IO.WatcherChangeTypes]::Changed, 50) | Out-Null
+            # Debounce: 20ms sleep to coalesce FSW duplicate events (known Windows FSW quirk)
+            Start-Sleep -Milliseconds 20
             $queue = Read-Json -path $script:queueFile
         }
 
@@ -174,6 +176,8 @@ while ($true) {
             $worker = Dispatch-ToWorker -cid $cid -ctype $ctype -cmd $cmd -timeout $origTimeout
             if ($worker) {
                 Add-Inflight -CmdId $cid -Worker $worker -Ctype $ctype -Cmd $cmd -Timeout $origTimeout
+                # Record content hash for future dedup
+                Add-ContentDedup -CmdText $rawCmd -CmdId $cid
                 $pipeDispatched = $true
                 Reset-QueueToIdle -Path $script:queueFile
                 Log "[$cid] V22 ASYNC-DISPATCH to $($worker.id) — inflight"
@@ -191,11 +195,4 @@ while ($true) {
                 Log "[RECOVERY] Reinitializing FileSystemWatcher"
                 $script:queueWatcher = [System.IO.FileSystemWatcher]::new($script:baseDir, "queue.txt")
                 $script:queueWatcher.EnableRaisingEvents = $true
-                Log "[RECOVERY] FSW reinitialized OK"
-            }
-        } catch {
-            Log "[RECOVERY] FSW reinit failed: $_"
-        }
-        try {
-            $q = Read-Json -path $script:queueFile
-            if ($q -and $q.state -eq "pending" -and $q
+              

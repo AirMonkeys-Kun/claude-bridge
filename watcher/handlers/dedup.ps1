@@ -2,8 +2,46 @@
 # Content-hash dedup — extracted from watcher.ps1 V22 (no logic change)
 # ══════════════════════════════════════════════════════════════════
 
-function Add-ContentDedup { param([string]$CmdText, [string]$CmdId) }
-function Get-ContentDedup { param([string]$CmdText) return $null }
+$script:contentDedup = @{}
+$script:dedupTtlSec = 60  # 60-second dedup window
+
+function Add-ContentDedup {
+    <#.SYNOPSIS Store command content hash for future dedup.#>
+    param([string]$CmdText, [string]$CmdId)
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($CmdText)
+        $hashBytes = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        $hash = [System.Convert]::ToBase64String($hashBytes)
+        $script:contentDedup[$hash] = @{
+            cmd_id    = $CmdId
+            timestamp = (Get-Date)
+        }
+    } catch {
+        # Silent — dedup failure should not crash
+    }
+}
+
+function Get-ContentDedup {
+    <#.SYNOPSIS Look up command content hash. Returns $null if no hit or expired.#>
+    param([string]$CmdText)
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($CmdText)
+        $hashBytes = [System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+        $hash = [System.Convert]::ToBase64String($hashBytes)
+        if ($script:contentDedup.ContainsKey($hash)) {
+            $entry = $script:contentDedup[$hash]
+            $ageSec = [int]((Get-Date) - $entry.timestamp).TotalSeconds
+            if ($ageSec -le $script:dedupTtlSec) {
+                return $entry
+            } else {
+                $script:contentDedup.Remove($hash)
+            }
+        }
+    } catch {
+        # Silent
+    }
+    return $null
+}
 
 function Invoke-HandleDedup {
     <#.SYNOPSIS Check content-hash dedup. Returns $true if dedup hit (command skipped).#>
@@ -28,4 +66,13 @@ function Invoke-HandleDedup {
     }
     Reset-QueueToIdle -Path $script:queueFile
     return $true
+}
+
+function Invoke-ContentDedupCleanup {
+    <#.SYNOPSIS Purge expired entries from content dedup store (called from housekeeping).#>
+    $now = Get-Date
+    $expired = @($script:contentDedup.Keys | Where-Object {
+        ($now - $script:contentDedup[$_].timestamp).TotalSeconds -gt $script:dedupTtlSec
+    })
+    foreach ($key in $expired) { $script:contentDedup.Remove($key) }
 }

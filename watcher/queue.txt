@@ -1,1 +1,1 @@
-{"state":"pending","cmd_id":"git-commit-v22.1b","command":"Set-Location D:\\zebbingo\\tools\\claude-bridge; git add -A; git commit -m \"V22.1: crash circuit breaker + mutex guard + proxy restart backoff\" --allow-empty", "type":"__INLINE__"}
+{"state":"pending","cmd_id":"git-commit-poolsync-v2.4","command":"Set-Location D:\\zebbingo\\tools\\claude-bridge; git add -A; git commit -m \"V2.4: fix pool sync — direct PID verification, zero log noise when healthy\"","type":"__INLINE__"}

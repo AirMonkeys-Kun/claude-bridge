@@ -1,1 +1,1 @@
-{"v":3,"state":"idle"}
+{"v":3, "state": "pending", "cmd_id": "ping_001", "type": "wsl", "command": "echo 'WSL bridge OK'; whoami; hostname", "timeout": 15}

@@ -156,4 +156,74 @@ public class LaunchUser {
             STARTUPINFOW si = new STARTUPINFOW();
             si.cb = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(STARTUPINFOW));
             PROCESS_INFORMATION pi;
-            StringBuilder cmdLine = new StringBuilder("\"" + exePath + 
+            StringBuilder cmdLine = new StringBuilder("\"" + exePath + "\" " + cmdArgs);
+
+            if (!CreateProcessAsUserW(hPrimaryToken, null, cmdLine, IntPtr.Zero, IntPtr.Zero, false, CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT, envBlock, null, ref si, out pi)) {
+                Console.Error.WriteLine("CreateProcessAsUser failed: " + GetLastError());
+                DestroyEnvironmentBlock(envBlock);
+                return 1;
+            }
+
+            Console.WriteLine("PID=" + pi.dwProcessId);
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+            DestroyEnvironmentBlock(envBlock);
+            return 0;
+        } catch (Exception ex) {
+            Console.Error.WriteLine("EXCEPTION: " + ex.Message);
+            return 1;
+        }
+    }
+}
+'@
+
+# Compile
+try {
+    TLog "Compiling launch_user.exe..."
+    Add-Type -TypeDefinition $csCode -Language CSharp -OutputType ConsoleApplication -OutputAssembly $exePath -ErrorAction Stop
+    TLog "Compiled OK: $exePath"
+} catch {
+    TLog "Compile error: $_"
+    exit 1
+}
+
+# Launch via compiled exe
+$workerArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$workerScript`" -WorkerDir `"$bridgeBase`""
+$psPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+
+TLog "Launching: $exePath $psPath $workerArgs"
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $exePath
+$psi.Arguments = "`"$psPath`" $workerArgs"
+$psi.RedirectStandardOutput = $true
+$psi.RedirectStandardError = $true
+$psi.UseShellExecute = $false
+$psi.CreateNoWindow = $true
+$p = [System.Diagnostics.Process]::Start($psi)
+if (-not $p) { TLog "Failed to start launch_user.exe"; exit 1 }
+
+$p.WaitForExit(15000)
+$stdout = $p.StandardOutput.ReadToEnd().Trim()
+$stderr = $p.StandardError.ReadToEnd().Trim()
+$exitCode = $p.ExitCode
+$p.Dispose()
+
+TLog "launch_user exit=$exitCode stdout=$stdout stderr=$stderr"
+
+if ($exitCode -eq 0 -and $stdout -match "^PID=(\d+)$") {
+    $workerPid = $matches[1]
+    TLog "Worker launched PID=$workerPid"
+    Start-Sleep -Seconds 3
+    if (Test-Path (Join-Path $bridgeBase "queue.txt")) {
+        TLog "Worker initialized OK"
+    } else {
+        TLog "Queue not created yet (might take longer)"
+    }
+    [System.IO.File]::WriteAllText($startedFlag, "PID=$pid`r`nStarted: $(Get-Date)`r`nExe: $exePath", $utf8)
+    TLog "Flag written"
+} else {
+    TLog "Failed to launch worker"
+    exit 1
+}
+
+TLog "=== COMPLETE ==="

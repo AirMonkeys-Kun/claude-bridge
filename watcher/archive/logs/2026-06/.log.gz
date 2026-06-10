@@ -1,0 +1,6 @@
+2026-06-10 06:58:03.247 | LOG_FAIL: 使用“3”个参数调用“AppendAllText”时发生异常:“空路径名是非法的。”
+2026-06-10 06:58:03.247 | ORIGINAL: [FATAL] Main loop exception: System.Management.Automation.ParameterBindingValidationException: 无法将参数绑定到参数“Path”，因为该参数为空字符串。
+   在 System.Management.Automation.ExceptionHandlingOps.CheckActionPreference(FunctionContext funcContext, Exception exception)
+   在 lambda_method(Closure , Object[] , StrongBox`1[] , InterpretedFrame )
+2026-06-10 06:58:03.250 | LOG_FAIL: 使用“3”个参数调用“AppendAllText”时发生异常:“空路径名是非法的。”
+2026-06-10 06:58:03.250 | ORIGINAL: [POLL] Error: 无法将参数绑定到参数“Path”，因为该参数为空字符串。

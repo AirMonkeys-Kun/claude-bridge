@@ -1,0 +1,1 @@
+{"cmd_id":"health_check","command":"curl -s http://127.0.0.1:9100/health","type":"bash","cwd":"/home/administrator/projects/resonova","timeout":10000}

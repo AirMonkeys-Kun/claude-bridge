@@ -1,0 +1,8 @@
+{
+  "state": "idle",
+  "cmd_id": "check_state",
+  "command": "cat /mnt/d/zebbingo/tools/claude-bridge/watcher/r_pb_test_progress.json 2>/dev/null; echo '---'; ls -la /mnt/d/zebbingo/tools/claude-bridge/watcher/r_pb_test* 2>/dev/null; echo '---QUEUE---'; cat /mnt/d/zebbingo/tools/claude-bridge/watcher/queue.txt",
+  "type": "wsl",
+  "timeout": 10,
+  "source": "claude_context_resume"
+}

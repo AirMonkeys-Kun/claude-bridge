@@ -1,1 +1,1 @@
-{"v":3,"state":"idle"}
+{"v":3,"state":"pending","cmd_id":"test_001","command":"echo bridge alive","type":"powershell_text","timeout":15}

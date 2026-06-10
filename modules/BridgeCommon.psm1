@@ -16,8 +16,8 @@ $Script:Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
 # ── Constants ──
 $Script:IdleQueueJson = '{"state":"idle","cmd_id":"","command":"","type":""}'
-$Script:MaxFileRetries = 3
-$Script:FileRetryDelayMs = 50
+$Script:MaxFileRetries = 5
+$Script:FileRetryDelayMs = 200
 
 # ══════════════════════════════════════════════════════════════════
 # File I/O helpers

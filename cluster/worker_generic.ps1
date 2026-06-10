@@ -383,3 +383,49 @@ while ($true) {
             } catch {
                 Log "[$cid] FALLBACK ScriptBlock failed ($($_.Exception.Message)) — subprocess fallback"
             }
+        }
+
+        # ── Subprocess fallback ──
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            if ($ctype -eq "cmd") {
+                $psi.FileName = "cmd.exe"; $psi.Arguments = "/c $cmd"
+            } elseif ($ctype -eq "wsl") {
+                $psi.FileName = "wsl.exe"; $psi.Arguments = "-e bash -c `"$($cmd -replace '"', '\"')`""
+            } else {
+                $psi.FileName = "powershell.exe"
+                $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"$($cmd -replace '"', '\"')`""
+            }
+            $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
+            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+            $psi.StandardOutputEncoding = $script:utf8nobom; $psi.StandardErrorEncoding = $script:utf8nobom
+
+            $p = [System.Diagnostics.Process]::Start($psi)
+            if (-not $p) { throw "Process.Start returned null" }
+
+            $outTask = $p.StandardOutput.ReadToEndAsync()
+            $errTask = $p.StandardError.ReadToEndAsync()
+
+            if ($p.WaitForExit(($timeout+2)*1000)) {
+                $exitCode = $p.ExitCode
+                $stdout = $outTask.Result
+                $stderr = $errTask.Result
+            } else {
+                $p.Kill(); Start-Sleep -Milliseconds 300
+                try { $stdout = $outTask.Result } catch { $stdout = "[TIMEOUT]" }
+                try { $stderr = $errTask.Result } catch {}
+                $exitCode = -1; $errorMsg = "TIMEOUT after ${timeout}s"
+            }
+            $p.Dispose()
+        } catch {
+            $errorMsg = $_.Exception.Message
+            Log "[$cid] FALLBACK EXCEPTION: $errorMsg"
+        }
+
+        $elapsed = [int]((Get-Date) - $t0).TotalMilliseconds
+        $res = @{state=$(if($errorMsg){"error"}else{"done"});cmd_id=$cid;exit_code=$exitCode;stdout=$stdout;stderr=$stderr;error=$errorMsg;duration_ms=$elapsed;fast_path=$fastPath;pipe_direct=$false;timestamp=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
+        WF (Join-Path $script:resultDir "r_${cid}.json") ($res | ConvertTo-Json -Compress)
+        Log "[$cid] FALLBACK DONE: exit=$exitCode dur=${elapsed}ms fast=$fastPath"
+        WF $script:queueFile $idleQueue
+    }
+}

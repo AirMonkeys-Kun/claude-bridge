@@ -49,3 +49,8 @@ $script:queueWatcher.Path = $script:baseDir
 $script:queueWatcher.Filter = "queue.txt"
 $script:queueWatcher.NotifyFilter = [System.IO.NotifyFilters]::LastWrite
 Log "V22 FileSystemWatcher initialized — event-driven queue monitoring"
+
+# Named Mutex — cross-process singleton guard (V22.1, replaces unreliable PID lock)
+# Auto-released on process exit/crash. Prevents multi-watcher cascades.
+$script:watcherMutexName = "Global\ClaudeBridgeWatcher_V2"
+$script:watcherMutex = New-Object System.Threading.Mutex($false, $script:watcherMutexName)

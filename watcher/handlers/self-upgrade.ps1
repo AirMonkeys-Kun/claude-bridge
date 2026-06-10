@@ -47,4 +47,28 @@ function Test-SelfUpgrade {
                 }
 
                 if ((Get-InflightCount) -eq 0) {
-                    $drainDuration = [int]((Get-D
+                    $drainDuration = [int]((Get-Date) - $drainStart).TotalMilliseconds
+                    Log "[SELF-UPGRADE] Inflight drained in ${drainDuration}ms — proceeding with restart"
+                }
+
+                # 5. Save inflight to disk (P1.3) — for post-restart recovery if any remain
+                Save-InflightToDisk
+
+                $script:watcherScriptHash = $currentHash
+                $script:selfUpgradeLastTrigger = Get-Date
+                Write-Text -path $script:restartFlagFile -content ((Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"))
+                $restartCmd = @{
+                    state = "pending"
+                    cmd_id = "__SELF_UPGRADE_$(Get-Date -Format 'yyyyMMddHHmmss')__"
+                    type = "__BRIDGE_RESTART__"
+                    command = "__BRIDGE_RESTART__"
+                    timeout = 10
+                }
+                Write-Text -path $script:queueFile -content ($restartCmd | ConvertTo-Json -Compress)
+                Log "[SELF-UPGRADE] Restart command written (drain=${drainElapsed}s, 60s cooldown engaged)"
+            }
+        } catch {
+            Log "[SELF-UPGRADE] Check failed: $_"
+        }
+    }
+}

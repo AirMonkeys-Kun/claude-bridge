@@ -58,28 +58,52 @@ Log "Rule engine loaded from BridgeRules.psm1"
 . $PSScriptRoot\handlers\execution.ps1
 . $PSScriptRoot\handlers\self-upgrade.ps1
 . $PSScriptRoot\handlers\archiver.ps1
+. $PSScriptRoot\handlers\pool-sync.ps1
 
 # ══════════════════════════════════════════════════════════════════
-# Startup — cleanup, PID lock, queue init
+# Startup — cleanup, mutex guard, queue init
 # ══════════════════════════════════════════════════════════════════
 Get-ChildItem "$script:baseDir\*.tmp" -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
-$lockFile = Join-Path $script:baseDir ".watcher.lock"
-if (Test-Path $lockFile) {
+# Clean up sentinel from previous crash (V22.1)
+$gaveUpFile = Join-Path $script:baseDir ".watcher_gave_up"
+if (Test-Path $gaveUpFile) {
     try {
-        $oldPid = [int]([System.IO.File]::ReadAllText($lockFile, $script:utf8).Trim())
-        $oldProc = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
-        if ($oldProc -and $oldProc.ProcessName -match "powershell") {
-            Log "Another watcher PID=$oldPid already running - exiting"
-            exit 0
-        }
+        $gaveUpContent = [System.IO.File]::ReadAllText($gaveUpFile, $script:utf8)
+        Log "Previous crash sentinel found: $gaveUpContent"
+        Remove-Item $gaveUpFile -Force -ErrorAction SilentlyContinue
     } catch { }
 }
+
+# Named Mutex singleton guard (V22.1) — kernel-level, auto-released on crash
+# Uses 3s timeout: if another instance holds it, that instance is alive → we exit
 try {
-    [System.IO.File]::WriteAllText($lockFile, [string]$PID, $script:utf8)
-    Log "PID lock acquired: $PID"
+    if (-not $script:watcherMutex.WaitOne([TimeSpan]::FromSeconds(3))) {
+        Log "Another watcher instance holds mutex '$script:watcherMutexName' — exiting"
+        exit 0
+    }
+    Log "Mutex acquired: $script:watcherMutexName (PID=$PID)"
 } catch {
-    Log "WARNING: could not write lock file: $_"
+    # Mutex acquisition failed (e.g. running in session without Global\ prefix access)
+    # Fall back to PID lock file
+    Log "WARNING: Mutex acquisition failed ($($_.Exception.Message)) — falling back to PID lock"
+    $lockFile = Join-Path $script:baseDir ".watcher.lock"
+    if (Test-Path $lockFile) {
+        try {
+            $oldPid = [int]([System.IO.File]::ReadAllText($lockFile, $script:utf8).Trim())
+            $oldProc = Get-Process -Id $oldPid -ErrorAction SilentlyContinue
+            if ($oldProc -and $oldProc.ProcessName -match "powershell") {
+                Log "Another watcher PID=$oldPid already running - exiting"
+                exit 0
+            }
+        } catch { }
+    }
+    try {
+        [System.IO.File]::WriteAllText($lockFile, [string]$PID, $script:utf8)
+        Log "PID lock acquired (fallback): $PID"
+    } catch {
+        Log "WARNING: could not write lock file: $_"
+    }
 }
 
 Log "=== Bridge V22+ (modular) STARTED ==="
@@ -104,7 +128,22 @@ if ($restoredCount -gt 0) {
 # Reset worker health registry on startup (P2.1)
 Reset-WorkerHealth
 
+# Sync worker pool from .lock files — prevents PID staleness (V2.3)
+try {
+    Sync-WorkerPool
+} catch {
+    Log "[WARN] Worker pool sync error (non-fatal): $($_.Exception.Message)"
+}
+
 Log "Ready — V22+ modular (ScriptBlock fast-path, 50ms FSW timeout, dual-channel)"
+
+# ══════════════════════════════════════════════════════════════════
+# Crash circuit breaker (V22.1 — prevent infinite crash loop)
+# ══════════════════════════════════════════════════════════════════
+$script:crashCounter = 0
+$script:crashBackoff = 1
+$script:crashMaxExit = 20           # Exit after this many consecutive crashes
+$script:lastSuccessfulIteration = Get-Date
 
 # ══════════════════════════════════════════════════════════════════
 # Main loop — event-driven with polling fallback
@@ -112,6 +151,9 @@ Log "Ready — V22+ modular (ScriptBlock fast-path, 50ms FSW timeout, dual-chann
 $script:pollCounter = 0
 while ($true) {
     try {
+        # 0. Crash circuit breaker — if we reached here, previous iteration was successful
+        $script:crashCounter = 0; $script:crashBackoff = 1; $script:lastSuccessfulIteration = Get-Date
+
         # 1. Heartbeat
         Write-Heartbeat -Path $script:heartbeatFile
 
@@ -189,10 +231,51 @@ while ($true) {
             }
         }
     } catch {
-        Log "[FATAL] Main loop exception: $($_.Exception.ToString())"
-        try {
-            if (-not $script:queueWatcher) {
-                Log "[RECOVERY] Reinitializing FileSystemWatcher"
-                $script:queueWatcher = [System.IO.FileSystemWatcher]::new($script:baseDir, "queue.txt")
-                $script:queueWatcher.EnableRaisingEvents = $true
-              
+        $script:crashCounter++
+        $script:crashBackoff = [Math]::Min($script:crashBackoff * 2, 60)   # 1→2→4→8...→60 max
+        $backoff = [Math]::Min($script:crashBackoff, 60)
+        Log "[FATAL] Crash #$script:crashCounter — backing off ${backoff}s — $($_.Exception.Message)"
+
+        if ($script:crashCounter -ge $script:crashMaxExit) {
+            Log "[FATAL] $script:crashCounter consecutive crashes — giving up. Write sentinel and exit."
+            try {
+                [System.IO.File]::WriteAllText(
+                    (Join-Path $script:baseDir ".watcher_gave_up"),
+                    "PID=$PID | $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | $($script:crashCounter) crashes | last=$($_.Exception.Message)",
+                    $script:utf8
+                )
+            } catch {}
+            exit 1
+        }
+
+        # FSW recovery (only on first few crashes)
+        if ($script:crashCounter -le 5) {
+            try {
+                if (-not $script:queueWatcher) {
+                    Log "[RECOVERY] Reinitializing FileSystemWatcher"
+                    $script:queueWatcher = [System.IO.FileSystemWatcher]::new($script:baseDir, "queue.txt")
+                    $script:queueWatcher.EnableRaisingEvents = $true
+                    Log "[RECOVERY] FSW reinitialized OK"
+                }
+            } catch { Log "[RECOVERY] FSW reinit failed: $_" }
+        }
+
+        # Attempt to recover pending command (only on early crashes, skip if OOM)
+        if ($script:crashCounter -le 3) {
+            try {
+                $q = Read-Json -path $script:queueFile
+                if ($q -and $q.state -eq "pending" -and $q.cmd_id -ne "" -and $q.cmd_id -ne $script:lastCmdId) {
+                    Log "[POLL] catch-block process $($q.cmd_id)"
+                    $script:lastCmdId = $q.cmd_id
+                    if ($q.type -eq "__INLINE__") {
+                        Invoke-InlineExecution -CmdId $q.cmd_id -RawCmd $q.command -StartTime (Get-Date)
+                    } else {
+                        Reset-QueueToIdle -Path $script:queueFile
+                    }
+                }
+            } catch { Log "[POLL] Error: $($_.Exception.Message)" }
+        }
+
+        Start-Sleep -Seconds $backoff
+    }
+}

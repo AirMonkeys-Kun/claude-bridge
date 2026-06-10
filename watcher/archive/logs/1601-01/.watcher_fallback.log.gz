@@ -1,0 +1,2 @@
+2026-06-10 08:49:46.268 | LOG_FAIL: 使用“3”个参数调用“AppendAllText”时发生异常:“文件“D:\zebbingo\tools\claude-bridge\watcher\watcher.log”正由另一进程使用，因此该进程无法访问此文件。”
+2026-06-10 08:49:46.268 | ORIGINAL: [POLL] Error: 无法将参数绑定到参数“Path”，因为该参数为空字符串。

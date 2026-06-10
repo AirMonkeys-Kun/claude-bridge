@@ -1,1 +1,1 @@
-{"state":"pending","cmd_id":"git-commit-poolsync-v2.4","command":"Set-Location D:\\zebbingo\\tools\\claude-bridge; git add -A; git commit -m \"V2.4: fix pool sync — direct PID verification, zero log noise when healthy\"","type":"__INLINE__"}
+{"state":"pending","cmd_id":"git-commit-wsl-pipe","command":"Set-Location D:\\zebbingo\\tools\\claude-bridge; git add -A; git commit -m \"Dispatch V2.5: WSL pipe health check 2000ms (was 100ms) to handle WSL-WSL interop latency\"","type":"__INLINE__"}

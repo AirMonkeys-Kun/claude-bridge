@@ -11,14 +11,18 @@ function Reset-WorkerHealth {
 }
 
 function Test-WorkerPipeHealth {
-    <#.SYNOPSIS Quick pre-flight check: ping worker pipe with 100ms timeout.
+    <#.SYNOPSIS Quick pre-flight check: ping worker pipe with adaptive timeout.
      Returns $true if pipe responds, $false otherwise.
-     Updates health registry on failure.#>
-    param([string]$PipeName, [string]$WorkerId)
+     Updates health registry on failure.
+     WSL workers get 2000ms timeout (interop latency), others 100ms.#>
+    param([string]$PipeName, [string]$WorkerId, [string]$WorkerType = "")
 
     try {
+        # Adaptive timeout: 2000ms for WSL, 100ms for others
+        $timeout = if ($WorkerType -eq "wsl") { 2000 } else { 100 }
+
         $testPipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", $PipeName, [System.IO.Pipes.PipeDirection]::InOut)
-        $testPipe.Connect(100)  # 100ms timeout — fast failure
+        $testPipe.Connect($timeout)
         $testPipe.Close()
         $testPipe.Dispose()
         # Mark healthy
@@ -122,7 +126,7 @@ function Get-WorkerForType {
                 break
             }
         }
-        if (Test-WorkerPipeHealth -PipeName $w.pipe -WorkerId $w.id) {
+        if (Test-WorkerPipeHealth -PipeName $w.pipe -WorkerId $w.id -WorkerType $w.type) {
             $preferred = $w
             break
         }

@@ -55,6 +55,7 @@ function Read-Text { param([string]$path) Read-SafeText -Path $path }
 $script:heartbeatStaleSeconds = 120
 $script:guardianRunCount = 0
 $script:lastWorkerDeployTime = $null  # tracks when workers were last deployed (avoids false startup alerts)
+$script:memCritical = $false          # V3.1: memory pressure flag for worker reduction
 # log rotation handled by Invoke-LogRotation from BridgeCommon (500 lines)
 
 # ── Maintenance lock protocol ──
@@ -88,12 +89,38 @@ function Test-MaintenanceLock {
     }
 }
 
+# ── Memory thresholds ──
+$script:memWarnPercent = 10   # warn when free memory below 10%
+$script:memCritPercent = 5    # critical — force worker reduction
+$script:lastMemWarning = $null
+
+function Get-MemoryPressure {
+    <#
+     Returns @{freeMB=N; totalMB=N; freePct=N; warning=bool; critical=bool}
+    #>
+    try {
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+        if (-not $os) { return $null }
+        $freeMB  = [math]::Round($os.FreePhysicalMemory / 1024)
+        $totalMB = [math]::Round($os.TotalVisibleMemorySize / 1024)
+        $freePct = [math]::Round($freeMB / $totalMB * 100, 1)
+        return @{
+            freeMB    = $freeMB
+            totalMB   = $totalMB
+            freePct   = $freePct
+            warning   = ($freePct -lt $script:memWarnPercent)
+            critical  = ($freePct -lt $script:memCritPercent)
+        }
+    } catch { return $null }
+}
+
 # ── Worker type definitions (matching worker_factory.ps1) ──
+# V3.1: Reduced worker counts to mitigate memory pressure (was: generic=6, file=4, process=2, system=2)
 $script:workerTypes = @(
-    @{type="generic"; count=6},
-    @{type="file";    count=4},
-    @{type="process"; count=2},
-    @{type="system";  count=2},
+    @{type="generic"; count=6},   # actively used by WSL/system/process commands
+    @{type="file";    count=2},   # reduced from 4
+    @{type="process"; count=1},   # reduced from 2
+    @{type="system";  count=1},   # reduced from 2
     @{type="wsl";     count=1},
     @{type="user";    count=1}
 )
@@ -457,7 +484,23 @@ function Invoke-GuardianCheck {
     $watcherStatus = Get-WatcherStatus
     Log "Watcher status: $watcherStatus"
 
-    # ── Step 2: Check graceful restart flag ──
+    # ── Step 1.5: Memory pressure check ──
+    $mem = Get-MemoryPressure
+    if ($mem) {
+        if ($mem.critical) {
+            Log "[MEMORY] CRITICAL — $($mem.freeMB)MB free / $($mem.totalMB)MB total ($($mem.freePct)%)"
+            # Force immediate worker reduction: flag pool sync to skip non-essential workers
+            $script:memCritical = $true
+        } elseif ($mem.warning) {
+            if (-not $script:lastMemWarning -or ((Get-Date) - $script:lastMemWarning).TotalSeconds -gt 300) {
+                Log "[MEMORY] WARNING — $($mem.freeMB)MB free / $($mem.totalMB)MB total ($($mem.freePct)%)"
+                $script:lastMemWarning = Get-Date
+            }
+            $script:memCritical = $false
+        } else {
+            $script:memCritical = $false
+        }
+    }
     $restartSignal = Get-GracefulRestartFlag
     if ($restartSignal) {
         Log "Graceful restart flag detected (at $restartSignal)"

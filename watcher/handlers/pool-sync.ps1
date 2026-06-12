@@ -41,7 +41,15 @@ function Sync-WorkerPool {
         } catch {}
 
         if ($pidAlive) {
-            $alive += $w
+            # Read current heartbeat timestamp for this worker
+            $hbFile = Join-Path (Join-Path (Split-Path -Parent $script:baseDir) "cluster\$($w.id)") ".heartbeat"
+            $hbTime = $null
+            if (Test-Path $hbFile) {
+                try { $hbTime = [System.IO.File]::ReadAllText($hbFile, $script:utf8).Trim() } catch {}
+            }
+            $entry = @{} + $w
+            if ($hbTime) { $entry.last_heartbeat = $hbTime }
+            $alive += $entry
             continue
         }
 

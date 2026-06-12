@@ -153,34 +153,63 @@ function Dispatch-ToWorker {
         return $null
     }
 
-    $worker = Get-WorkerForType -ctype $ctype
-    if (-not $worker) {
-        Log "[$cid] No worker available for type '$ctype'"
-        return $null
-    }
+    $maxRetries = 3
+    $lastError = $null
 
-    try {
-        $pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", $worker.pipe, [System.IO.Pipes.PipeDirection]::InOut)
-        $pipe.Connect(300)
-        $reader = New-Object System.IO.StreamReader($pipe, $script:utf8)
-        $writer = New-Object System.IO.StreamWriter($pipe, $script:utf8)
-        $writer.AutoFlush = $true
-
-        $cmdJson = @{cmd_id=$cid; command=$cmd; type=$ctype; timeout=$timeout} | ConvertTo-Json -Compress
-        $writer.WriteLine($cmdJson)
-
-        $ackTask = $reader.ReadLineAsync()
-        $gotAck = $ackTask.Wait(100)
-
-        $pipe.Close()
-        if ($gotAck) {
-            Log "[$cid] DISPATCH to $($worker.id) — ACK received"
-        } else {
-            Log "[$cid] DISPATCH to $($worker.id) — sent (no ACK, assumed delivered)"
+    for ($retry = 0; $retry -lt $maxRetries; $retry++) {
+        $worker = Get-WorkerForType -ctype $ctype
+        if (-not $worker) {
+            Log "[$cid] No worker available for type '$ctype' (retry $retry)"
+            if ($retry -eq 0) { return $null }  # no workers at all, no point retrying
+            break
         }
-        return $worker
-    } catch {
-        Log "[$cid] DISPATCH to $($worker.id) failed: $($_.Exception.Message)"
-        return $null
+
+        try {
+            $pipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", $worker.pipe, [System.IO.Pipes.PipeDirection]::InOut)
+            $pipe.Connect(300)
+            $reader = New-Object System.IO.StreamReader($pipe, $script:utf8)
+            $writer = New-Object System.IO.StreamWriter($pipe, $script:utf8)
+            $writer.AutoFlush = $true
+
+            $cmdJson = @{cmd_id=$cid; command=$cmd; type=$ctype; timeout=$timeout} | ConvertTo-Json -Compress
+            $writer.WriteLine($cmdJson)
+
+            $ackTask = $reader.ReadLineAsync()
+            $gotAck = $ackTask.Wait(100)
+
+            $pipe.Close()
+            # Mark success in health registry
+            $h = $script:workerHealth[$worker.id]
+            if ($h) { $h.failure_count = 0; $h.status = "healthy"; $h.last_seen_healthy = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff") }
+            if ($gotAck) {
+                Log "[$cid] DISPATCH to $($worker.id) — ACK received"
+            } else {
+                Log "[$cid] DISPATCH to $($worker.id) — sent (no ACK, assumed delivered)"
+            }
+            return $worker
+        } catch {
+            $lastError = $_.Exception.Message
+            Log "[$cid] DISPATCH to $($worker.id) failed (retry $retry): $lastError"
+            # Mark this worker as unresponsive in health registry so next Get-WorkerForType skips it
+            if ($script:workerHealth.ContainsKey($worker.id)) {
+                $h = $script:workerHealth[$worker.id]
+                $h.failure_count = ($h.failure_count + 1)
+                if ($h.failure_count -ge 10) { $h.status = "dead" }
+                elseif ($h.failure_count -ge 3) { $h.status = "degraded" }
+            } else {
+                $script:workerHealth[$worker.id] = @{
+                    last_seen_healthy = $null
+                    failure_count = 1
+                    status = "degraded"
+                    degraded_at = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+                }
+            }
+            # Brief pause before retry to let pipe settle
+            Start-Sleep -Milliseconds 50
+        }
     }
+
+    # All retries exhausted — let caller fallback to subprocess
+    Log "[$cid] DISPATCH failed after $maxRetries retries: $lastError"
+    return $null
 }

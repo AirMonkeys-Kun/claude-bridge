@@ -8,7 +8,7 @@ import sys
 import time
 
 from .config import (
-    POOL_FILE, TYPE_MAP, _worker_pool, _pool_load_time, _pool_lock,
+    POOL_FILE, TYPE_MAP,
 )
 
 
@@ -42,22 +42,17 @@ def is_pid_alive(pid):
 
 
 def load_worker_pool(force=False):
-    """Load and cache .worker_pool.json (30s TTL)."""
-    import bridge_agent.config as cfg
-    now = time.monotonic()
-    with _pool_lock:
-        if not force and cfg._worker_pool and (now - cfg._pool_load_time) < 30:
-            return cfg._worker_pool
-        pool_data = _read_json(POOL_FILE)
-        if pool_data and "workers" in pool_data:
-            cfg._worker_pool = pool_data
-            cfg._pool_load_time = now
-            return cfg._worker_pool
+    """Load .worker_pool.json directly (no cache — pool-sync is authoritative)."""
+    pool_data = _read_json(POOL_FILE)
+    if pool_data and "workers" in pool_data:
+        return pool_data
     return None
 
 
 def find_all_workers(cmd_type):
-    """Find ALL alive workers for the given command type. Returns list."""
+    """Find ALL workers for the given command type. Returns list.
+    Pool file is authoritative — watcher's pool-sync already verifies PIDs
+    and prunes dead entries. No additional is_pid_alive check needed."""
     pool = load_worker_pool()
     if not pool or not pool.get("workers"):
         return []
@@ -67,7 +62,7 @@ def find_all_workers(cmd_type):
     if not candidates and target != "generic":
         candidates = [w for w in pool["workers"] if w.get("type") == "generic"]
 
-    return [w for w in candidates if is_pid_alive(w["pid"])]
+    return candidates
 
 
 def _read_json(path):

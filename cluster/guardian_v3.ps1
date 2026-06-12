@@ -832,13 +832,59 @@ function Invoke-GuardianCheck {
 }
 
 # ============================================================
-# Entry point
+# Entry point (V3.3: perpetual daemon with memory-aware restart)
 # ============================================================
+# Guardian runs as a persistent daemon — no self-termination.
+# PowerShell has gradual memory fragmentation in long-running
+# processes, so we monitor free memory and gracefully restart
+# when critically low (guard-dog picks up within 60s).
+#
+# Architecture:
+#   OS (Run key / Windows Service) → guardian (perpetual) → watcher + workers
+#   Guard-dog (Scheduled Task, 60s) → safety net, not primary scheduler
+#
+# This eliminates the V3.2 "55s suicide loop" design which was
+# a workaround for PS memory leaks disguised as architecture.
 
 try {
     $logDir = Split-Path $script:logFile -Parent
     if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
-    Invoke-GuardianCheck
+
+    $script:loopInterval = 20
+    $script:restartMemPct = 4.0    # free memory below this → graceful restart
+    $script:maxIterations  = 1500  # ~8.3h at 20s interval — PS fragmentation ceiling
+    $script:iterationCount = 0
+    $script:loopStart      = Get-Date
+
+    Log "Guardian V3.3 daemon started — perpetual mode (restart at <${script:restartMemPct}% free or ${script:maxIterations} iterations)"
+
+    while ($true) {
+        $script:iterationCount++
+        Invoke-GuardianCheck
+
+        # ── Memory-aware restart ──
+        if ($script:iterationCount -ge $script:maxIterations) {
+            Log "REACHED maxIterations=$script:maxIterations — graceful restart (guard-dog will pick up)"
+            # Final heartbeat so guard-dog sees a valid timestamp briefly
+            try {
+                $ghb = Join-Path $script:watcherDir ".guardian_heartbeat"
+                [System.IO.File]::WriteAllText($ghb, (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"), $script:utf8)
+            } catch { }
+            exit 0
+        }
+
+        $mem = Get-MemoryPressure
+        if ($mem -and $mem.critical) {
+            Log "CRITICAL memory ($($mem.freePct)% free) — graceful restart (guard-dog will pick up)"
+            try {
+                $ghb = Join-Path $script:watcherDir ".guardian_heartbeat"
+                [System.IO.File]::WriteAllText($ghb, (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"), $script:utf8)
+            } catch { }
+            exit 0
+        }
+
+        Start-Sleep -Seconds $script:loopInterval
+    }
 } catch {
     $ex = $_.Exception.ToString()
     Log "FATAL: Unhandled exception: $ex"

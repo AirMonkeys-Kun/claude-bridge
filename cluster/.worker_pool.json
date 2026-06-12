@@ -4,115 +4,148 @@
                         "id":  "generic_1",
                         "type":  "generic",
                         "queue":  "cluster\\generic_1\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_generic_1",
-                        "pid":  6972,
-                        "last_heartbeat":  "2026-06-12 11:34:02.027"
+                        "pid":  23472,
+                        "last_heartbeat":  "2026-06-12 15:44:47.383"
                     },
                     {
                         "id":  "generic_2",
                         "type":  "generic",
                         "queue":  "cluster\\generic_2\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_generic_2",
-                        "pid":  8120,
-                        "last_heartbeat":  "2026-06-12 11:34:01.995"
+                        "pid":  26736,
+                        "last_heartbeat":  "2026-06-12 15:44:47.186"
                     },
                     {
                         "id":  "generic_3",
                         "type":  "generic",
                         "queue":  "cluster\\generic_3\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_generic_3",
-                        "pid":  8084,
-                        "last_heartbeat":  "2026-06-12 11:34:02.338"
+                        "pid":  37008,
+                        "last_heartbeat":  "2026-06-12 15:44:47.322"
                     },
                     {
                         "id":  "generic_4",
                         "type":  "generic",
                         "queue":  "cluster\\generic_4\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_generic_4",
-                        "pid":  6952,
-                        "last_heartbeat":  "2026-06-12 11:34:02.338"
+                        "pid":  18456,
+                        "last_heartbeat":  "2026-06-12 15:44:47.185"
                     },
                     {
                         "id":  "generic_5",
                         "type":  "generic",
                         "queue":  "cluster\\generic_5\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_generic_5",
-                        "pid":  5768,
-                        "last_heartbeat":  "2026-06-12 11:34:02.291"
+                        "pid":  30668,
+                        "last_heartbeat":  "2026-06-12 15:44:47.399"
                     },
                     {
                         "id":  "generic_6",
                         "type":  "generic",
                         "queue":  "cluster\\generic_6\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_generic_6",
-                        "pid":  8228,
-                        "last_heartbeat":  "2026-06-12 11:34:02.011"
+                        "pid":  7588,
+                        "last_heartbeat":  "2026-06-12 15:44:47.444"
                     },
                     {
                         "id":  "file_1",
                         "type":  "file",
                         "queue":  "cluster\\file_1\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_file_1",
-                        "pid":  8292,
-                        "last_heartbeat":  "2026-06-12 11:34:02.446"
+                        "pid":  21736,
+                        "last_heartbeat":  "2026-06-12 15:44:47.185"
                     },
                     {
                         "id":  "file_2",
                         "type":  "file",
                         "queue":  "cluster\\file_2\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_file_2",
-                        "pid":  8348,
-                        "last_heartbeat":  "2026-06-12 11:34:02.088"
+                        "pid":  22552,
+                        "last_heartbeat":  "2026-06-12 15:44:47.185"
                     },
                     {
                         "id":  "file_3",
                         "type":  "file",
                         "queue":  "cluster\\file_3\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_file_3",
-                        "pid":  8404,
-                        "last_heartbeat":  "2026-06-12 11:34:02.011"
+                        "pid":  1588,
+                        "last_heartbeat":  "2026-06-12 15:44:47.598"
                     },
                     {
                         "id":  "file_4",
                         "type":  "file",
                         "queue":  "cluster\\file_4\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_file_4",
-                        "pid":  8476,
-                        "last_heartbeat":  "2026-06-12 11:34:02.105"
+                        "pid":  12512,
+                        "last_heartbeat":  "2026-06-12 15:44:47.538"
                     },
                     {
                         "id":  "process_1",
                         "type":  "process",
                         "queue":  "cluster\\process_1\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_process_1",
-                        "pid":  8548,
-                        "last_heartbeat":  "2026-06-12 11:34:02.430"
+                        "pid":  19040,
+                        "last_heartbeat":  "2026-06-12 15:44:47.185"
                     },
                     {
                         "id":  "process_2",
                         "type":  "process",
                         "queue":  "cluster\\process_2\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_process_2",
-                        "pid":  8624,
-                        "last_heartbeat":  "2026-06-12 11:34:02.477"
+                        "pid":  3140,
+                        "last_heartbeat":  "2026-06-12 15:44:47.185"
                     },
                     {
                         "id":  "system_1",
                         "type":  "system",
                         "queue":  "cluster\\system_1\\queue.txt",
-                        "started":  "2026-06-10 15:30:32",
+                        "started":  "2026-06-12 15:08:14",
                         "pipe":  "Cluster_Wkr_system_1",
-                        "pid":  8736,
-  
+                        "pid":  2528,
+                        "last_heartbeat":  "2026-06-12 15:44:47.186"
+                    },
+                    {
+                        "id":  "system_2",
+                        "type":  "system",
+                        "queue":  "cluster\\system_2\\queue.txt",
+                        "started":  "2026-06-12 15:08:14",
+                        "pipe":  "Cluster_Wkr_system_2",
+                        "pid":  33100,
+                        "last_heartbeat":  "2026-06-12 15:44:47.186"
+                    },
+                    {
+                        "id":  "wsl_1",
+                        "type":  "wsl",
+                        "queue":  "cluster\\wsl_1\\queue.txt",
+                        "started":  "2026-06-12 15:08:14",
+                        "pipe":  "Cluster_Wkr_wsl_1",
+                        "pid":  11008,
+                        "last_heartbeat":  "2026-06-12 15:44:47.185"
+                    },
+                    {
+                        "id":  "user_1",
+                        "type":  "user",
+                        "queue":  "cluster\\user_1\\queue.txt",
+                        "started":  "2026-06-12 15:08:15",
+                        "pipe":  "Cluster_Wkr_user_1",
+                        "pid":  18448,
+                        "last_heartbeat":  "2026-06-12 15:44:47.690"
+                    }
+                ],
+    "created":  "2026-06-12 15:08:19",
+    "version":  "2.2",
+    "updated":  "2026-06-12 15:44:47"
+}

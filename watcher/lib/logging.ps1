@@ -27,4 +27,22 @@ function Log { param([string]$m)
             try {
                 [System.IO.File]::AppendAllText($fallbackPath, "$t | LOG_FAIL: $($_.Exception.Message)`r`n", $script:utf8)
                 [System.IO.File]::AppendAllText($fallbackPath, "$t | ORIGINAL: $m`r`n", $script:utf8)
-     
+            } catch {
+                # Secondary fallback: bridge root fallback (different volume may work)
+                $rootFallback = Join-Path (Split-Path -Parent $script:baseDir) ".bridge_root_fallback.log"
+                try {
+                    [System.IO.File]::AppendAllText($rootFallback, "$t | LOG_FAIL: $($_.Exception.Message)`r`n", $script:utf8)
+                    [System.IO.File]::AppendAllText($rootFallback, "$t | ORIGINAL: $m`r`n", $script:utf8)
+                } catch {
+                    # Last resort: write to a temp file that is almost always writable
+                    try {
+                        $tempFallback = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "bridge_watcher_fallback.log")
+                        [System.IO.File]::AppendAllText($tempFallback, "$t | ALL_LOG_FAILED: primary+fallback both failed`r`n", [System.Text.UTF8Encoding]::new($false))
+                    } catch {}
+                }
+            }
+        } catch {}
+    }
+}
+Set-Alias Write-Text  Write-SafeFile
+Set-Alias Read-Json   Read-SafeJson

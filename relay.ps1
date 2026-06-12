@@ -1,11 +1,22 @@
 #Requires -Version 5.0
 <#
 .SYNOPSIS
-    Bridge Relay — syncs root D:\zebbingo\queue.txt ↔ watcher/queue.txt
+    Bridge Relay — DEPRECATED since 2026-06-12 (V3.2)
 .DESCRIPTION
-    Monitors the root queue.txt (public-facing entry point) and forwards
-    pending commands to the watcher's internal queue.txt for execution.
-    Also copies results back to root directory.
+    This relay was used to sync D:\zebbingo\queue.txt ↔ watcher/queue.txt.
+
+    DEPRECATION: The relay added an unnecessary intermediary layer. The watcher
+    reads watcher\queue.txt directly via FileSystemWatcher. All commands should
+    be written directly to watcher\queue.txt instead of going through the root
+    queue. The relay process is no longer started by guardian.
+
+    Reason for removal:
+    - Relay and watcher run on the same Windows machine
+    - Forwarding file content between two local files is pure overhead
+    - One fewer process to manage = one fewer failure mode
+    - The root D:\zebbingo\ directory is not accessible from all contexts
+
+    Kept for backward compatibility only. Will be removed in V4.
 #>
 
 $ErrorActionPreference = "Continue"
@@ -44,6 +55,7 @@ function Write-Json($path, $obj) {
 $idleRoot = @{state="idle"; cmd_id=""; command=""; type=""}
 $lastForwarded = ""
 
+RLog "Relay started — DEPRECATED (V3.2). Direct watcher\queue.txt writes replace relay."
 RLog "Relay started — root=$rootQueue, watcher=$watcherQueue"
 
 while ($true) {

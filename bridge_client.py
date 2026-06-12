@@ -242,4 +242,18 @@ def main():
             cmd["timeout"] = int(args[args.index("--timeout") + 1])
     elif positional:
         # Treat first positional arg as the command string
-        cmd = {"command": positional[0], "type": "powershell", "
+        cmd = {"command": positional[0], "type": "powershell", "timeout": 30}
+    else:
+        print("No command argument provided")
+        sys.exit(1)
+
+    result, channel = send_command(cmd, force_fallback=force_fallback)
+    result["_channel"] = channel
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+    # Exit code
+    sys.exit(result.get("exit_code", 1))
+
+
+if __name__ == "__main__":
+    main()

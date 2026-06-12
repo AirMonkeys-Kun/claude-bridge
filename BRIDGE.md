@@ -125,7 +125,7 @@ pending → running → (done / error)
 | `powershell_text` | PowerShell（推荐 ✅，默认）| 通过 `-Command "..."` 启动子进程，无 CLIXML 噪声 |
 | `powershell` | PowerShell 命令 | 通过 `-EncodedCommand` 启动子进程（⚠️ 有 CLIXML 在 stderr）|
 | `cmd` | CMD 命令 | 通过 `cmd /c` 启动子进程（⚠️ 子进程输出可能截断）|
-| `user` | 用户上下文执行 | 转发到 `user_bridge` worker（token duplication）|
+| `user` | 用户上下文执行（仅必要时用）| 转发到 `user_bridge` worker（token duplication）。**仅在需要用户桌面环境时使用**（如 HKCU 注册表、AppX 包、映射网络驱动器、%USERPROFILE% 变量）。**git、文件操作等不需要**——它们通过 SYSTEM 上下文完全可用。|
 | `__INLINE__` | 内联执行 | 在当前 watcher 进程中用 `ScriptBlock.Create` 执行 |
 
 ### 响应格式（r_{cmd_id}.json）
@@ -1162,11 +1162,4 @@ v4 ✅ (最终)     — ReadToEndAsync() + WaitForExit + task.Result — 100%
 - **修复**：多行 stdout 截断 — 在 timed WaitForExit 后增加 parameterless WaitForExit()
 - **修复**：INLINE `$_:` 解析问题 — 使用 `${_}` 替代
 - **新增**：本文档（BRIDGE.md）
-- **新增**：`register-workers.ps1` — 一键管理脚本（register/start/stop/restart/status/cleanup）
-- **改进**：worker_template.ps1 增加 v2 版本注释和详细说明
-
-### v1 (初始版本)
-
-- 初始集群桥实现
-- 6 个 worker + master_scheduler
-- 基于文件 IPC 的 queue/json 协议
+- **新增**：`register-workers.ps1` — 一键管理脚本（registe

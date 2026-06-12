@@ -134,7 +134,7 @@ master_scheduler.ps1 (永远空闲，0 次调度)
 
 ## 4. 命令重复执行
 
-**37 条命令同时在 watcher 和 user_bridge 各执行一次。** 这些命令在 user_bridge 中执行是因为它们需要用户上下文（git、环境变量），但 watcher 也提交了相同命令到自己的执行队列。
+**37 条命令同时在 watcher 和 user_bridge 各执行一次。** 这些命令在 user_bridge 中执行是因为当时认为它们需要用户上下文（git、环境变量），但后续验证发现 git 等操作通过 `git -C` 在 SYSTEM 上下文中完全可用——git 凭据通过 Windows Credential Manager 全局可访问。重复执行的根本原因是命令分发逻辑将同一命令同时路由到两个 worker。
 
 ### 最浪费的重复执行
 
@@ -294,8 +294,4 @@ start_new_proxy, debug_proxy
 |----------|--------|--------|------|
 | `find_deepseek` / deepseek 扫描 | 30s | 240s | 成功执行需 220s |
 | `git push` 系列 | 30s | 60s | 正常推送 ~19s |
-| `chk_worker` 系列 | 15s | 30s | 耗时 16.8s |
-| `v4_grd_chk` | 10s | 20s | 耗时 13.3s |
-| `daily_report` 系列 | 30s | 180s | 成功执行需 85s |
-| `dl_codex` 下载 | 30s | 600s | 大文件下载 |
-
+| `chk_worker

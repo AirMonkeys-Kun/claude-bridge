@@ -26,7 +26,7 @@ Write-Host "Bridge base: $bridgeBase" -ForegroundColor Gray
 # ── Step 1: Clean stale artifacts ──
 Write-Host "`n[1/5] Cleaning stale artifacts..." -ForegroundColor Yellow
 foreach ($f in @(".watcher_heartbeat", ".guardian_heartbeat", ".watcher.lock", ".graceful_restart", ".maintenance.lock")) {
-    $path = Join-Path $bridgeBase "watcher" $f
+    $path = Join-Path (Join-Path $bridgeBase "watcher") $f
     if (Test-Path $path) { Remove-Item $path -Force; Write-Host "  DEL watcher\$f" }
 }
 # Kill orphaned watcher/worker processes
@@ -48,7 +48,7 @@ try {
     Unregister-ScheduledTask -TaskName "BridgeGuardDog" -Confirm:$false -ErrorAction SilentlyContinue
 
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$guardDogScript`""
-    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration ([TimeSpan]::MaxValue)
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration ([TimeSpan]::FromDays(3650))
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
     Register-ScheduledTask -TaskName "BridgeGuardDog" -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Force | Out-Null
 
@@ -135,4 +135,4 @@ Write-Host "Logs:"
 Write-Host "  guardian: $watchLog"
 Write-Host "  guard-dog: $dogLog"
 Write-Host "`nTo check status later:"
-Write-Host "  Get-Content '$watchLog' -Tail 5"
+Write-Host "  Get-Content '$w

@@ -6,7 +6,7 @@
         {
             "id": "collect_state",
             "channel": "user",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\zebbingo\\claude-bridge\\cluster\\collect_state.ps1\"",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"D:\\zebbingo\\tools\\claude-bridge\\cluster\\collect_state.ps1\"",
             "type": "cmd",
             "timeout": 60,
             "enabled": true,
@@ -26,7 +26,7 @@
         {
             "id": "check_worker_health",
             "channel": "user",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$d='D:\\zebbingo\\claude-bridge\\cluster'; $w=@('file_bridge','registry_bridge','process_bridge','network_bridge','system_bridge','wsl_bridge','user_bridge'); $r=@{}; foreach($n in $w){$f=Join-Path (Join-Path $d $n) '.watcher_heartbeat'; if(Test-Path $f){$a=[math]::Round(((Get-Date)-(Get-Item $f).LastWriteTime).TotalSeconds,0); $r[$n]=$a}else{$r[$n]=$null}}; ($r|ConvertTo-Json -Compress)\"",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$d='D:\\zebbingo\\tools\\claude-bridge\\cluster'; $w=@('file_bridge','registry_bridge','process_bridge','network_bridge','system_bridge','wsl_bridge','user_bridge'); $r=@{}; foreach($n in $w){$f=Join-Path (Join-Path $d $n) '.watcher_heartbeat'; if(Test-Path $f){$a=[math]::Round(((Get-Date)-(Get-Item $f).LastWriteTime).TotalSeconds,0); $r[$n]=$a}else{$r[$n]=$null}}; ($r|ConvertTo-Json -Compress)\"",
             "type": "cmd",
             "timeout": 30,
             "enabled": true,
@@ -43,5 +43,4 @@
             "description": "Remove WSL UNC paths from session JSON userSelectedFolders to prevent VM crash",
             "cron": "*/5 * * * *"
         }
-    ]
-}
+ 

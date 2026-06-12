@@ -35,7 +35,7 @@ if (-not $BridgeBase) {
     if ($PSScriptRoot) {
         $BridgeBase = Split-Path -Parent $PSScriptRoot  # cluster/ 的上一级
     } else {
-        $BridgeBase = "D:\zebbingo\claude-bridge"
+        $BridgeBase = "D:\zebbingo\tools\claude-bridge"
     }
 }
 $clusterDir = Join-Path $BridgeBase "cluster"
@@ -251,5 +251,4 @@ switch ($Command) {
     "restart"  { Invoke-Restart }
     "status"   { Invoke-Status }
     "cleanup"  { Invoke-Cleanup }
-    default    { Invoke-Status }
-}
+    default    { Invoke-Statu

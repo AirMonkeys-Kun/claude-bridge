@@ -1,1 +1,1 @@
-{"v":3, "state": "pending", "cmd_id": "chk_stt_01", "type": "wsl", "command": "cd /home/administrator/projects/chatbot && /home/administrator/projects/chatbot/.venv/bin/python -c \"import os; os.environ['CUDA_VISIBLE_DEVICES']=''; from faster_whisper import WhisperModel; m=WhisperModel('tiny',device='cpu',compute_type='int8',cpu_threads=4); print('STT_CPU_OK')\" 2>&1", "timeout": 120}
+{"v":3,"state":"idle"}

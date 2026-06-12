@@ -642,7 +642,7 @@ Pipe 协议对 host 侧 doorbell 是死路。继续使用**基于文件系统的
 ### 步骤 1：在新机器上部署文件
 
 ```
-D:\zebbingo\claude-bridge\cluster\
+D:\zebbingo\tools\claude-bridge\cluster\
 ├── worker_template.ps1          # 复制
 ├── master_scheduler.ps1         # 复制
 ├── {每个 worker 目录}/           # 创建目录结构
@@ -658,7 +658,7 @@ D:\zebbingo\claude-bridge\cluster\
 
 ```powershell
 # 示例：注册 file_bridge
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File D:\zebbingo\claude-bridge\cluster\worker_template.ps1 -WorkerName file_bridge -BridgeBase D:\zebbingo\claude-bridge"
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File D:\zebbingo\tools\claude-bridge\cluster\worker_template.ps1 -WorkerName file_bridge -BridgeBase D:\zebbingo\tools\claude-bridge"
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 Register-ScheduledTask -TaskName "BridgeCluster-file_bridge" -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Force
@@ -681,7 +681,7 @@ Register-ScheduledTask -TaskName "BridgeCluster-file_bridge" -Action $action -Tr
 
 ```powershell
 # 一键启动所有 worker
-powershell -NoProfile -ExecutionPolicy Bypass -File D:\zebbingo\claude-bridge\cluster\start-workers.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\zebbingo\tools\claude-bridge\cluster\start-workers.ps1
 ```
 
 或使用 Scheduled Task：
@@ -704,10 +704,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "D:\zebbingo\tools\claude-br
 
 ```powershell
 # 快速健康检查（管理员身份）
-powershell -NoProfile -ExecutionPolicy Bypass -File D:\zebbingo\claude-bridge\cluster\cluster-health.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File D:\zebbingo\tools\claude-bridge\cluster\cluster-health.ps1
 
 # 或者手动检查心跳文件
-Get-ChildItem D:\zebbingo\claude-bridge\cluster\*\watcher_heartbeat | Select-Object DirectoryName, LastWriteTime
+Get-ChildItem D:\zebbingo\tools\claude-bridge\cluster\*\watcher_heartbeat | Select-Object DirectoryName, LastWriteTime
 ```
 
 ### 步骤 6：配置 CLAUDE.md
@@ -731,7 +731,7 @@ Get-ChildItem D:\zebbingo\claude-bridge\cluster\*\watcher_heartbeat | Select-Obj
 2. 确认没有端口或文件冲突
 3. 尝试手动启动测试：
    ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File cluster\worker_template.ps1 -WorkerName file_bridge -BridgeBase D:\zebbingo\claude-bridge
+   powershell -NoProfile -ExecutionPolicy Bypass -File cluster\worker_template.ps1 -WorkerName file_bridge -BridgeBase D:\zebbingo\tools\claude-bridge
    ```
 
 ### 结果文件写入失败

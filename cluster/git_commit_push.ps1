@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Continue"
-$repoDir = "D:\zebbingo\claude-bridge"
+$repoDir = "D:\zebbingo\tools\claude-bridge"
 $git = "D:\Program Files\Git\cmd\git.exe"
 
 Write-Host "S1 repo=$repoDir"

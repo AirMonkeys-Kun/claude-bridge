@@ -113,14 +113,6 @@
                         "pipe":  "Cluster_Wkr_system_2"
                     },
                     {
-                        "id":  "wsl_1",
-                        "started":  "2026-06-10 15:30:32",
-                        "pid":  8824,
-                        "type":  "wsl",
-                        "queue":  "cluster\\wsl_1\\queue.txt",
-                        "pipe":  "Cluster_Wkr_wsl_1"
-                    },
-                    {
                         "id":  "user_1",
                         "started":  "2026-06-10 15:30:32",
                         "pid":  8952,
@@ -131,5 +123,5 @@
                 ],
     "created":  "2026-06-10 15:30:36",
     "version":  "2.2",
-    "updated":  "2026-06-10 15:30:36"
+    "updated":  "2026-06-11 17:36:42"
 }

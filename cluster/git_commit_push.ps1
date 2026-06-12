@@ -41,4 +41,4 @@ Write-Host "S11 e=$LASTEXITCODE"
 if ($LASTEXITCODE -ne 0) { Write-Host "FAIL push"; exit 1 }
 
 Write-Host "S12 DONE"
-exit 0
+e

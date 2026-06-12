@@ -1,0 +1,3 @@
+﻿a23444c V3.1: dispatch retry + pool heartbeat + guardian memory monitor + reduce workers
+347177b logging: 3-level fallback + rotation fix for silent log failure
+242e4fb dispatch: WSL pipe health check timeout 100ms -> 2000ms adaptive

@@ -9,7 +9,7 @@ Usage from Claude sandbox:
     python3 bridge_client.py '{"command":"echo hello","type":"powershell","timeout":30}'
     python3 bridge_client.py --cmd "echo hello" --type powershell
     python3 bridge_client.py --ping
-    python3 bridge_client.py --fallback  # force file-based mode
+    python3 bridge_client.py --fallback '{"command":"..."}'  # force file-based mode (--fallback before or after JSON, both work)
 
 Environment:
     BRIDGE_HOST    — bridge_agent IP (default: 172.16.10.254)
@@ -228,10 +228,11 @@ def main():
     # --fallback force
     force_fallback = "--fallback" in args
 
-    # Parse command
-    if args[0].startswith("{"):
-        # Raw JSON
-        cmd = json.loads(args[0])
+    # Parse command — strip --flags first so position doesn't matter
+    positional = [a for a in args if not a.startswith("--")]
+    if positional and positional[0].startswith("{"):
+        # Raw JSON (works even if --fallback comes before JSON)
+        cmd = json.loads(positional[0])
     elif "--cmd" in args:
         # --cmd "echo hello" --type powershell --timeout 30
         cmd = {"command": args[args.index("--cmd") + 1]}
@@ -239,17 +240,6 @@ def main():
             cmd["type"] = args[args.index("--type") + 1]
         if "--timeout" in args:
             cmd["timeout"] = int(args[args.index("--timeout") + 1])
-    else:
-        # Treat first arg as the command string
-        cmd = {"command": args[0], "type": "powershell", "timeout": 30}
-
-    result, channel = send_command(cmd, force_fallback=force_fallback)
-    result["_channel"] = channel
-    print(json.dumps(result, indent=2, ensure_ascii=False))
-
-    # Exit code
-    sys.exit(result.get("exit_code", 1))
-
-
-if __name__ == "__main__":
-    main()
+    elif positional:
+        # Treat first positional arg as the command string
+        cmd = {"command": positional[0], "type": "powershell", "

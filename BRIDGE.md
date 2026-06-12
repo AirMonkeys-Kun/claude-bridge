@@ -1162,11 +1162,4 @@ v4 ✅ (最终)     — ReadToEndAsync() + WaitForExit + task.Result — 100%
 - **修复**：多行 stdout 截断 — 在 timed WaitForExit 后增加 parameterless WaitForExit()
 - **修复**：INLINE `$_:` 解析问题 — 使用 `${_}` 替代
 - **新增**：本文档（BRIDGE.md）
-- **新增**：`register-workers.ps1` — 一键管理脚本（register/start/stop/restart/status/cleanup）
-- **改进**：worker_template.ps1 增加 v2 版本注释和详细说明
-
-### v1 (初始版本)
-
-- 初始集群桥实现
-- 6 个 worker + master_scheduler
-- 基于文件 IPC 的 queue/json 协议
+- **新增**：`register-workers.ps1` — 一键管理脚本（registe

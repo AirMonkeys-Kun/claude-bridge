@@ -251,5 +251,4 @@ switch ($Command) {
     "restart"  { Invoke-Restart }
     "status"   { Invoke-Status }
     "cleanup"  { Invoke-Cleanup }
-    default    { Invoke-Status }
-}
+    default    { Invoke-Statu

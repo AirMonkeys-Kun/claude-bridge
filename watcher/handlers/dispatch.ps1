@@ -179,37 +179,4 @@ function Dispatch-ToWorker {
 
             $pipe.Close()
             # Mark success in health registry
-            $h = $script:workerHealth[$worker.id]
-            if ($h) { $h.failure_count = 0; $h.status = "healthy"; $h.last_seen_healthy = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff") }
-            if ($gotAck) {
-                Log "[$cid] DISPATCH to $($worker.id) — ACK received"
-            } else {
-                Log "[$cid] DISPATCH to $($worker.id) — sent (no ACK, assumed delivered)"
-            }
-            return $worker
-        } catch {
-            $lastError = $_.Exception.Message
-            Log "[$cid] DISPATCH to $($worker.id) failed (retry $retry): $lastError"
-            # Mark this worker as unresponsive in health registry so next Get-WorkerForType skips it
-            if ($script:workerHealth.ContainsKey($worker.id)) {
-                $h = $script:workerHealth[$worker.id]
-                $h.failure_count = ($h.failure_count + 1)
-                if ($h.failure_count -ge 10) { $h.status = "dead" }
-                elseif ($h.failure_count -ge 3) { $h.status = "degraded" }
-            } else {
-                $script:workerHealth[$worker.id] = @{
-                    last_seen_healthy = $null
-                    failure_count = 1
-                    status = "degraded"
-                    degraded_at = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
-                }
-            }
-            # Brief pause before retry to let pipe settle
-            Start-Sleep -Milliseconds 50
-        }
-    }
-
-    # All retries exhausted — let caller fallback to subprocess
-    Log "[$cid] DISPATCH failed after $maxRetries retries: $lastError"
-    return $null
-}
+            $h = $script:workerHealth[$worker

@@ -294,8 +294,4 @@ start_new_proxy, debug_proxy
 |----------|--------|--------|------|
 | `find_deepseek` / deepseek 扫描 | 30s | 240s | 成功执行需 220s |
 | `git push` 系列 | 30s | 60s | 正常推送 ~19s |
-| `chk_worker` 系列 | 15s | 30s | 耗时 16.8s |
-| `v4_grd_chk` | 10s | 20s | 耗时 13.3s |
-| `daily_report` 系列 | 30s | 180s | 成功执行需 85s |
-| `dl_codex` 下载 | 30s | 600s | 大文件下载 |
-
+| `chk_worker

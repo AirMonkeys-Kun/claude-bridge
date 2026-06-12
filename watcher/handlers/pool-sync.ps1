@@ -88,39 +88,4 @@ function Sync-WorkerPool {
 
         if ($newPid) {
             $updated = _ConvertTo-Hashtable $w
-            $updated.pid = $newPid
-            $updated.started = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-            $alive += $updated
-            $deadLog  += "$wid PID $($w.pid) → $newPid"
-            $pidDelta = $true
-        } else {
-            $deadLog += "$wid PID $($w.pid) — dead, no replacement found"
-            $pidDelta = $true
-        }
-    }
-
-    # ── 3. Quiet exit if nothing changed ──
-    if (-not $pidDelta) { return }
-
-    # ── 4. Atomic pool write ──
-    $newPool = @{
-        version = $currentPool.version
-        created = if ($currentPool.created) { $currentPool.created } else { (Get-Date -Format "yyyy-MM-dd HH:mm:ss") }
-        updated = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-        workers = $alive
-    }
-
-    try {
-        $json = $newPool | ConvertTo-Json -Depth 3
-        [System.IO.File]::WriteAllText($poolFile, $json, $script:utf8)
-
-        # Reset in-memory cache so dispatcher picks up changes immediately
-        $script:pool = $null
-        $script:poolLastLoad = $null
-
-        Log "[POOLSYNC] Updated pool: $($alive.Count)/$($workers.Count) workers alive"
-        foreach ($entry in $deadLog) { Log "[POOLSYNC]   $entry" }
-    } catch {
-        Log "[POOLSYNC] Write failed: $_"
-    }
-}
+    

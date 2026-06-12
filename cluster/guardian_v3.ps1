@@ -56,6 +56,8 @@ $script:heartbeatStaleSeconds = 120
 $script:guardianRunCount = 0
 $script:lastWorkerDeployTime = $null  # tracks when workers were last deployed (avoids false startup alerts)
 $script:memCritical = $false          # V3.1: memory pressure flag for worker reduction
+$script:pipeHealthCache = @{}          # V3.2: per-worker pipe health state
+$script:lastWorkerRotateTime = $null   # V3.2: last rolling restart time
 # log rotation handled by Invoke-LogRotation from BridgeCommon (500 lines)
 
 # ── Maintenance lock protocol ──
@@ -114,6 +116,20 @@ function Get-MemoryPressure {
     } catch { return $null }
 }
 
+function Test-WorkerNamedPipe {
+    param([string]$WorkerId, [string]$PipeName)
+    $entry = $script:pipeHealthCache[$WorkerId]
+    if (-not $entry) { $entry = @{healthy=$true; fail_count=0}; $script:pipeHealthCache[$WorkerId] = $entry }
+    try {
+        $testPipe = New-Object System.IO.Pipes.NamedPipeClientStream(".", $PipeName, [System.IO.Pipes.PipeDirection]::InOut)
+        $testPipe.Connect(500); $testPipe.Close(); $testPipe.Dispose()
+        $entry.healthy = $true; $entry.fail_count = 0; return $true
+    } catch {
+        $entry.fail_count++
+        if ($entry.fail_count -ge 3) { $entry.healthy = $false }
+        return $false
+    }
+}
 # ── Worker type definitions (matching worker_factory.ps1) ──
 # V3.1: Reduced worker counts to mitigate memory pressure (was: generic=6, file=4, process=2, system=2)
 $script:workerTypes = @(
@@ -553,6 +569,46 @@ function Invoke-GuardianCheck {
         Invoke-RespawnDeadWorkers
     }
 
+
+    # ── Step 4.5: Worker NamedPipe health check (V3.2) ──
+    $pipeCheckCount = 0; $pipeFailCount = 0
+    if ($ws.pool -and $ws.pool.workers) {
+        $checkList = @($ws.pool.workers | Where-Object { $_.pipe -and $_.type -ne "wsl" })
+        for ($i = 0; $i -lt [Math]::Min(3, $checkList.Count); $i++) {
+            $w = $checkList[$i % $checkList.Count]
+            if (Test-WorkerNamedPipe -WorkerId $w.id -PipeName $w.pipe) { $pipeCheckCount++ } else {
+                $pipeFailCount++; $ps = $script:pipeHealthCache[$w.id]
+                if ($ps -and $ps.fail_count -ge 3 -and -not $ps.healthy) {
+                    Log "  PIPE: $($w.id) unresponsive (fail count=$($ps.fail_count)) — subprocess fallback active"
+                }
+            }
+        }
+    }
+    if ($pipeCheckCount -gt 0) { Log "  Pipe check: $pipeCheckCount OK, $pipeFailCount failed" }
+
+    # ── Step 4.6: Rolling restart for workers >24h (V3.2) ──
+    if ($ws.pool -and $ws.pool.workers -and $ws.total -gt 0) {
+        $rotateInterval = if ($script:memCritical) { 12 } else { 24 }
+        $now = Get-Date; $shouldRotate = $false
+        if ($script:lastWorkerRotateTime) {
+            $hoursSince = ($now - $script:lastWorkerRotateTime).TotalHours
+            if ($hoursSince -ge $rotateInterval) { $shouldRotate = $true }
+        } else { $script:lastWorkerRotateTime = $now }
+        if ($shouldRotate) {
+            $oldest = $null; $oldestStart = $now
+            foreach ($w in $ws.pool.workers) {
+                if ($w.started) {
+                    try { $started = [DateTime]::ParseExact($w.started, "yyyy-MM-dd HH:mm:ss", $null); if ($started -lt $oldestStart) { $oldestStart = $started; $oldest = $w } } catch {}
+                }
+            }
+            if ($oldest) {
+                $ageHours = [math]::Round(($now - $oldestStart).TotalHours, 1)
+                Log "ACTION: Rolling restart of $($oldest.id) (age=${ageHours}h)"
+                try { Stop-Process -Id $oldest.pid -Force -ErrorAction SilentlyContinue; Log "  Killed PID=$($oldest.pid) — will be respawned" } catch { Log "  ERROR killing $($oldest.id): $_" }
+                $script:lastWorkerRotateTime = $now
+            }
+        }
+    }
     # ── Step 5: Check bridge_agent (TCP :19850) health ──
     $agentAlive = $false
     try {
@@ -739,4 +795,54 @@ function Invoke-GuardianCheck {
                 $runPsi.FileName = "powershell.exe"
                 $runPsi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$userRunnerScript`""
                 $runPsi.UseShellExecute = $false
-            
+                $runPsi.RedirectStandardOutput = $true
+                $runPsi.RedirectStandardError = $true
+                $runPsi.CreateNoWindow = $true
+                $runProc = [System.Diagnostics.Process]::Start($runPsi)
+                if ($runProc) {
+                    $runProc.WaitForExit(15000) | Out-Null
+                    $runnerExitCode = $runProc.ExitCode
+                    $runnerStderr = $runProc.StandardError.ReadToEnd().Trim()
+                    $runProc.Dispose()
+                    Log "  runner.ps1 exit=$runnerExitCode stderr=$runnerStderr"
+                    Start-Sleep -Seconds 3
+                    $verifyHb = Read-Text $userHbFile -ErrorAction SilentlyContinue
+                    if ($verifyHb) {
+                        Log "  user_bridge worker heartbeat confirmed: $verifyHb"
+                    } else {
+                        Log "  WARNING: user_bridge worker not started — runner exit=$runnerExitCode"
+                        if ($runnerStderr) { Log "  runner stderr: $runnerStderr" }
+                    }
+                }
+            } catch {
+                Log "  ERROR launching user_bridge: $($_.Exception.Message)"
+            }
+        } else {
+            Log "  ERROR: runner.ps1 not found at $userRunnerScript"
+        }
+    }
+
+    # ── Step 8: Write guardian heartbeat for guard-dog (V3.2) ──
+    $ghb = Join-Path $script:watcherDir ".guardian_heartbeat"
+    try {
+        [System.IO.File]::WriteAllText($ghb, (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"), $script:utf8)
+    } catch { }
+
+    Log "=== Guardian check #$($script:guardianRunCount) complete ==="
+}
+
+# ============================================================
+# Entry point
+# ============================================================
+
+try {
+    $logDir = Split-Path $script:logFile -Parent
+    if (-not (Test-Path $logDir)) { New-Item -Path $logDir -ItemType Directory -Force | Out-Null }
+    Invoke-GuardianCheck
+} catch {
+    $ex = $_.Exception.ToString()
+    Log "FATAL: Unhandled exception: $ex"
+    exit 1
+}
+
+exit 0

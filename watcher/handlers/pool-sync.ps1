@@ -11,6 +11,20 @@
 
 $script:poolSyncCounter = 0
 
+function _ConvertTo-Hashtable {
+    <#
+    .SYNOPSIS
+        Convert a PSCustomObject to a hashtable (PS 5.1 compatible).
+        Read-Json returns PSCustomObject; @{} + $obj fails with
+        "Only hashtables can be added to hashtables".
+    #>
+    param($InputObject)
+    $h = @{}
+    if (-not $InputObject) { return $h }
+    $InputObject.PSObject.Properties | ForEach-Object { $h[$_.Name] = $_.Value }
+    return $h
+}
+
 function Sync-WorkerPool {
     <#
     .SYNOPSIS
@@ -47,8 +61,14 @@ function Sync-WorkerPool {
             if (Test-Path $hbFile) {
                 try { $hbTime = [System.IO.File]::ReadAllText($hbFile, $script:utf8).Trim() } catch {}
             }
-            $entry = @{} + $w
-            if ($hbTime) { $entry.last_heartbeat = $hbTime }
+            $entry = _ConvertTo-Hashtable $w
+            if ($hbTime) {
+                # V3.1: persist last_heartbeat on every cycle so bridge_agent and
+                # guardian can read it from the pool file without checking per-worker files
+                $oldHb = if ($w.last_heartbeat) { $w.last_heartbeat } else { "" }
+                $entry.last_heartbeat = $hbTime
+                if ($hbTime -ne $oldHb) { $pidDelta = $true }
+            }
             $alive += $entry
             continue
         }
@@ -67,7 +87,7 @@ function Sync-WorkerPool {
         }
 
         if ($newPid) {
-            $updated = @{} + $w
+            $updated = _ConvertTo-Hashtable $w
             $updated.pid = $newPid
             $updated.started = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
             $alive += $updated

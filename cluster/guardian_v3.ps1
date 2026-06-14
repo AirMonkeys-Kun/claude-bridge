@@ -581,7 +581,13 @@ function Invoke-WorkerReplenish {
      the pool by 1 worker per death.
     #>
     $pool = Read-Json $script:poolFile
-    if (-not $pool -or -not $pool.workers -or $pool.workers.Count -eq 0) { return $false }
+    $poolEmpty = (-not $pool -or -not $pool.workers -or $pool.workers.Count -eq 0)
+    if ($poolEmpty) {
+        # Pool completely empty — deploy ALL expected workers (not just fill gaps)
+        Log "ACTION: REPLENISH pool empty — deploying all expected workers"
+        if (Test-Path $script:poolFile) { Remove-Item $script:poolFile -Force -ErrorAction SilentlyContinue }
+        return (Invoke-StartWorkers)
+    }
 
     # Expected worker plan (must match worker_factory.ps1 DeployAll plan)
     $expectedPlan = @(

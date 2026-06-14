@@ -528,6 +528,7 @@ function Invoke-PipeRecovery {
         }
     }
 
+    $killedAny = $false
     foreach ($c in $candidates) {
         $w = $pool.workers | Where-Object { $_.id -eq $c.id } | Select-Object -First 1
         if (-not $w -or -not $w.pid) {
@@ -540,17 +541,32 @@ function Invoke-PipeRecovery {
             # Already dead — clear cache, let Invoke-RespawnDeadWorkers handle it
             $script:pipeHealthCache[$c.id] = @{healthy=$true; fail_count=0}
             Log "  PIPE-RECOVERY: $($c.id) already dead (pid=$($w.pid)) — clearing cache, respawn will follow"
+            $killedAny = $true
             continue
         }
         try {
             Stop-Process -Id $w.pid -Force -ErrorAction SilentlyContinue
-            Log "ACTION: PIPE-RECOVERY killed $($c.id) (pid=$($w.pid), fail_count=$($c.fail)) — broken pipe; respawn next cycle"
+            Log "ACTION: PIPE-RECOVERY killed $($c.id) (pid=$($w.pid), fail_count=$($c.fail)) — broken pipe; forcing redeploy"
+            $killedAny = $true
         } catch {
             Log "  PIPE-RECOVERY ERROR killing $($c.id) (pid=$($w.pid)): $_"
         }
         # Reset cache + record cooldown
         $script:pipeHealthCache[$c.id] = @{healthy=$true; fail_count=0}
         $script:lastPipeRestartTime[$c.id] = Get-Date
+    }
+
+    # V3.4.1: If we killed any workers, trigger immediate redeploy.
+    # Otherwise watcher POOLSYNC removes the dead entry before the next guardian cycle,
+    # and Invoke-RespawnDeadWorkers never sees it as dead (threshold=2), so the worker
+    # is silently lost and the pool shrinks over time.
+    if ($killedAny) {
+        Log "ACTION: PIPE-RECOVERY triggering worker redeploy to replace killed worker(s)..."
+        # Remove stale pool file so factory starts clean
+        if (Test-Path $script:poolFile) {
+            Remove-Item $script:poolFile -Force -ErrorAction SilentlyContinue
+        }
+        Invoke-StartWorkers | Out-Null
     }
     return $true
 }

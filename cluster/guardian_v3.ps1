@@ -571,6 +571,106 @@ function Invoke-PipeRecovery {
     return $true
 }
 
+function Invoke-WorkerReplenish {
+    <#
+     V3.4.2: Detect and fill gaps in the worker pool.
+     For each worker type present in the pool, ensures all indices 1..max exist.
+     Deploys replacement workers for any gaps (caused by rolling restart kills,
+     single-worker crashes, or POOLSYNC cleaning dead entries between cycles).
+     This replaces the old "threshold=2 or nothing" approach that silently shrank
+     the pool by 1 worker per death.
+    #>
+    $pool = Read-Json $script:poolFile
+    if (-not $pool -or -not $pool.workers -or $pool.workers.Count -eq 0) { return $false }
+
+    # Expected worker plan (must match worker_factory.ps1 DeployAll plan)
+    $expectedPlan = @(
+        @{type="generic"; count=6}, @{type="file"; count=4},
+        @{type="process"; count=2}, @{type="system"; count=2},
+        @{type="wsl"; count=1}, @{type="user"; count=1}
+    )
+
+    # Build a map of present worker IDs
+    $presentIds = @{}
+    foreach ($w in $pool.workers) { $presentIds[$w.id] = $true }
+
+    # Find gaps: for each expected type, check all expected indices
+    $gaps = @()
+    foreach ($plan in $expectedPlan) {
+        $t = $plan.type
+        for ($i = 1; $i -le $plan.count; $i++) {
+            $wid = "${t}_${i}"
+            if (-not $presentIds[$wid]) { $gaps += @{id=$wid; type=$t; index=$i} }
+        }
+    }
+
+    if ($gaps.Count -eq 0) { return $false }
+
+    # Startup grace — don't deploy while workers are still booting
+    if ($script:lastWorkerDeployTime) {
+        $age = [int]((Get-Date) - $script:lastWorkerDeployTime).TotalSeconds
+        if ($age -lt 45) { return $false }
+    }
+
+    Log "ACTION: REPLENISH detected $($gaps.Count) gap(s): $($gaps.id -join ', ')"
+
+    $workerScript = Join-Path $script:clusterDir "worker_generic.ps1"
+    if (-not (Test-Path $workerScript)) {
+        Log "  REPLENISH ERROR: worker_generic.ps1 not found"
+        return $false
+    }
+
+    $newWorkers = @()
+    foreach ($g in $gaps) {
+        $wid = $g.id; $t = $g.type; $i = $g.index
+        $workerDir = Join-Path $script:clusterDir $wid
+        $pipeName = "Cluster_Wkr_${t}_${i}"
+
+        # Ensure worker dir + queue exist
+        New-Item -Path $workerDir -ItemType Directory -Force | Out-Null
+        $qFile = Join-Path $workerDir "queue.txt"
+        [System.IO.File]::WriteAllText($qFile, '{"state":"idle","cmd_id":"","command":"","type":""}', [System.Text.UTF8Encoding]::new($false))
+
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = "powershell.exe"
+            $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$workerScript`" -WorkerId $wid -Type $t -BridgeBase `"$script:bridgeBase`""
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.CreateNoWindow = $true
+            $p = [System.Diagnostics.Process]::Start($psi)
+            $null = $p.BeginOutputReadLine()
+            $null = $p.BeginErrorReadLine()
+
+            $newWorkers += @{
+                id = $wid; type = $t; pid = $p.Id; pipe = $pipeName
+                queue = "cluster\${wid}\queue.txt"
+                started = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+            }
+            Log "  REPLENISH deployed $wid (PID=$($p.Id))"
+        } catch {
+            Log "  REPLENISH FAILED for ${wid}: $_"
+        }
+    }
+
+    if ($newWorkers.Count -gt 0) {
+        # Read pool again (may have changed), append new workers, write back
+        $pool = Read-Json $script:poolFile
+        if ($pool -and $pool.workers) {
+            $pool.workers = @($pool.workers) + $newWorkers
+            $pool.updated = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
+            try {
+                $pool | ConvertTo-Json -Depth 3 | Out-File $script:poolFile -Encoding utf8 -NoNewline
+                Log "  REPLENISH: pool updated, $($newWorkers.Count) worker(s) added"
+            } catch {
+                Log "  REPLENISH ERROR writing pool: $_"
+            }
+        }
+    }
+    return $true
+}
+
 # ============================================================
 # Main Guardian Logic
 # ============================================================
@@ -660,6 +760,12 @@ function Invoke-GuardianCheck {
         Invoke-RespawnDeadWorkers
     }
 
+    # ── Step 4.1: Replenish missing workers (V3.4.2) ──
+    # Fills gaps in the pool regardless of cause: rolling restart kills, single-worker
+    # crashes, or POOLSYNC cleaning dead entries between cycles. Replaces the old
+    # "threshold=2 or silently shrink" approach.
+    Invoke-WorkerReplenish | Out-Null
+
 
     # ── Step 4.5: Worker NamedPipe health check (V3.4 — full coverage + auto recovery) ──
     $pipeCheckCount = 0; $pipeFailCount = 0
@@ -705,9 +811,11 @@ function Invoke-GuardianCheck {
             }
             if ($oldest) {
                 $ageHours = [math]::Round(($now - $oldestStart).TotalHours, 1)
-                Log "ACTION: Rolling restart of $($oldest.id) (age=${ageHours}h)"
-                try { Stop-Process -Id $oldest.pid -Force -ErrorAction SilentlyContinue; Log "  Killed PID=$($oldest.pid) — will be respawned" } catch { Log "  ERROR killing $($oldest.id): $_" }
+                Log "ACTION: Rolling restart of $($oldest.id) (age=${ageHours}h) — replenish will deploy replacement"
+                try { Stop-Process -Id $oldest.pid -Force -ErrorAction SilentlyContinue; Log "  Killed PID=$($oldest.pid)" } catch { Log "  ERROR killing $($oldest.id): $_" }
                 $script:lastWorkerRotateTime = $now
+                # V3.4.2: Replenish (Step 4.1) will detect the gap and deploy a replacement
+                # on the next cycle. No need for full redeploy — targeted replenish is less disruptive.
             }
         }
     }

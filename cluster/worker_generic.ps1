@@ -263,15 +263,35 @@ $script:pipeScriptBlock = {
             try { WF $healthFile ((Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")) } catch {}
             $pipe.Close()
 
+            # V3.4.2: Reset consecutive error counter on successful processing.
+            # Previous code NEVER reset pipeErrCount, so expected concurrency errors
+            # (client disconnect, instances busy) accumulated to 50 and permanently
+            # killed the pipe runspace — root cause of the 5-day silent pipe death.
+            $script:pipeErrCount = 0
+
         } catch {
-            $script:pipeErrCount = if ($script:pipeErrCount) { $script:pipeErrCount + 1 } else { 1 }
-            W "Pipe server error #${script:pipeErrCount}: $_"
-            if ($script:pipeErrCount -ge 50) {
-                W "Too many consecutive pipe errors (#${script:pipeErrCount}) — exiting pipe runspace"
-                try { if ($pipe) { $pipe.Close() } } catch {}
-                return  # Exit this runspace
+            # V3.4.2: Classify errors. Pipe-broken and instances-busy are EXPECTED
+            # during normal operation (watcher/guardian probing a busy worker).
+            # They must NOT count toward the exit threshold.
+            $errMsg = "$_"
+            # V3.4.2: Classify by exception TYPE, not message text (avoids locale/encoding issues).
+            # IOException covers pipe-broken and instances-busy — expected during normal operation.
+            # Real bugs (OOM, NullRef, InvalidOperation, etc.) still increment the counter.
+            $exType = if ($_.Exception) { $_.Exception.GetType().Name } else { '' }
+            $isExpected = ($exType -eq 'IOException' -or $errMsg -match 'All pipe instances' -or $errMsg -match 'broken pipe')
+
+            if ($isExpected) {
+                Start-Sleep -Milliseconds 50
+            } else {
+                $script:pipeErrCount = if ($script:pipeErrCount) { $script:pipeErrCount + 1 } else { 1 }
+                W "Pipe server error #${script:pipeErrCount} (real): $errMsg"
+                if ($script:pipeErrCount -ge 50) {
+                    W "Too many consecutive REAL pipe errors (#${script:pipeErrCount}) — exiting pipe runspace"
+                    try { if ($pipe) { $pipe.Close() } } catch {}
+                    return
+                }
+                Start-Sleep -Milliseconds 200
             }
-            Start-Sleep -Milliseconds 200
             try { if ($pipe) { $pipe.Close() } } catch {}
         }
     }

@@ -58,6 +58,10 @@ $script:lastWorkerDeployTime = $null  # tracks when workers were last deployed (
 $script:memCritical = $false          # V3.1: memory pressure flag for worker reduction
 $script:pipeHealthCache = @{}          # V3.2: per-worker pipe health state
 $script:lastWorkerRotateTime = $null   # V3.2: last rolling restart time
+$script:lastPipeRestartTime = @{}      # V3.4: per-worker cooldown tracker for pipe recovery
+$script:pipeCheckCursor    = 0         # V3.4: rotating cursor — ensures every worker is checked
+$script:PIPE_FAIL_THRESHOLD  = 6       # V3.4: consecutive failures before forced restart (~2 min at 20s cycles)
+$script:PIPE_RESTART_COOLDOWN = 300    # V3.4: per-worker cooldown seconds (5 min)
 # log rotation handled by Invoke-LogRotation from BridgeCommon (500 lines)
 
 # ── Maintenance lock protocol ──
@@ -480,6 +484,77 @@ function Invoke-RespawnDeadWorkers {
     return $true
 }
 
+function Invoke-PipeRecovery {
+    <#
+     V3.4: Restart workers whose NamedPipe endpoints are persistently dead.
+     Triggered from Step 4.5 after Test-WorkerNamedPipe has accumulated fail_count.
+     Strategy:
+       - For each worker in pipeHealthCache with fail_count >= PIPE_FAIL_THRESHOLD
+         AND healthy=$false: kill the worker process (next cycle respawns it)
+       - Apply per-worker cooldown (PIPE_RESTART_COOLDOWN=300s) to prevent flap
+       - Reset fail_count after restart action so we don't keep killing
+    #>
+    $candidates = @()
+    foreach ($id in @($script:pipeHealthCache.Keys)) {
+        $ps = $script:pipeHealthCache[$id]
+        if ($ps -and -not $ps.healthy -and $ps.fail_count -ge $script:PIPE_FAIL_THRESHOLD) {
+            $lastRestart = $script:lastPipeRestartTime[$id]
+            $cooldownOk = $true
+            if ($lastRestart) {
+                $sinceLast = [int]((Get-Date) - $lastRestart).TotalSeconds
+                if ($sinceLast -lt $script:PIPE_RESTART_COOLDOWN) {
+                    $cooldownOk = $false
+                }
+            }
+            if ($cooldownOk) { $candidates += @{id=$id; fail=$ps.fail_count} }
+        }
+    }
+
+    if ($candidates.Count -eq 0) { return $false }
+
+    # Resolve worker PIDs from pool file
+    $pool = Read-Json $script:poolFile
+    if (-not $pool -or -not $pool.workers) {
+        Log "  PIPE-RECOVERY: pool file unreadable — skipping (candidates: $($candidates.id -join ','))"
+        return $false
+    }
+
+    # Startup grace — don't kill workers deployed <60s ago
+    if ($script:lastWorkerDeployTime) {
+        $age = [int]((Get-Date) - $script:lastWorkerDeployTime).TotalSeconds
+        if ($age -lt 60) {
+            Log "  PIPE-RECOVERY: startup grace (${age}s<60s) — deferring (candidates: $($candidates.id -join ','))"
+            return $false
+        }
+    }
+
+    foreach ($c in $candidates) {
+        $w = $pool.workers | Where-Object { $_.id -eq $c.id } | Select-Object -First 1
+        if (-not $w -or -not $w.pid) {
+            # Worker not in pool — clear stale cache entry
+            $script:pipeHealthCache[$c.id] = @{healthy=$true; fail_count=0}
+            continue
+        }
+        $proc = Get-Process -Id $w.pid -ErrorAction SilentlyContinue
+        if (-not $proc) {
+            # Already dead — clear cache, let Invoke-RespawnDeadWorkers handle it
+            $script:pipeHealthCache[$c.id] = @{healthy=$true; fail_count=0}
+            Log "  PIPE-RECOVERY: $($c.id) already dead (pid=$($w.pid)) — clearing cache, respawn will follow"
+            continue
+        }
+        try {
+            Stop-Process -Id $w.pid -Force -ErrorAction SilentlyContinue
+            Log "ACTION: PIPE-RECOVERY killed $($c.id) (pid=$($w.pid), fail_count=$($c.fail)) — broken pipe; respawn next cycle"
+        } catch {
+            Log "  PIPE-RECOVERY ERROR killing $($c.id) (pid=$($w.pid)): $_"
+        }
+        # Reset cache + record cooldown
+        $script:pipeHealthCache[$c.id] = @{healthy=$true; fail_count=0}
+        $script:lastPipeRestartTime[$c.id] = Get-Date
+    }
+    return $true
+}
+
 # ============================================================
 # Main Guardian Logic
 # ============================================================
@@ -570,21 +645,32 @@ function Invoke-GuardianCheck {
     }
 
 
-    # ── Step 4.5: Worker NamedPipe health check (V3.2) ──
+    # ── Step 4.5: Worker NamedPipe health check (V3.4 — full coverage + auto recovery) ──
     $pipeCheckCount = 0; $pipeFailCount = 0
     if ($ws.pool -and $ws.pool.workers) {
         $checkList = @($ws.pool.workers | Where-Object { $_.pipe -and $_.type -ne "wsl" })
-        for ($i = 0; $i -lt [Math]::Min(3, $checkList.Count); $i++) {
-            $w = $checkList[$i % $checkList.Count]
-            if (Test-WorkerNamedPipe -WorkerId $w.id -PipeName $w.pipe) { $pipeCheckCount++ } else {
+        # V3.4: rotating cursor guarantees every worker is checked across cycles.
+        # Previous code sampled only workers[0..2] — workers 3..N were never health-checked,
+        # which is why all 6 generic workers' pipes died silently for 5 days.
+        $batchSize = [Math]::Min(6, $checkList.Count)
+        for ($i = 0; $i -lt $batchSize; $i++) {
+            $idx = ($script:pipeCheckCursor + $i) % $checkList.Count
+            $w = $checkList[$idx]
+            if (Test-WorkerNamedPipe -WorkerId $w.id -PipeName $w.pipe) {
+                $pipeCheckCount++
+            } else {
                 $pipeFailCount++; $ps = $script:pipeHealthCache[$w.id]
                 if ($ps -and $ps.fail_count -ge 3 -and -not $ps.healthy) {
-                    Log "  PIPE: $($w.id) unresponsive (fail count=$($ps.fail_count)) — subprocess fallback active"
+                    Log "  PIPE: $($w.id) unresponsive (fail count=$($ps.fail_count)) — V3.4 recovery will trigger at $($script:PIPE_FAIL_THRESHOLD)"
                 }
             }
         }
+        $script:pipeCheckCursor = ($script:pipeCheckCursor + $batchSize) % $checkList.Count
     }
     if ($pipeCheckCount -gt 0) { Log "  Pipe check: $pipeCheckCount OK, $pipeFailCount failed" }
+
+    # ── Step 4.5b: Auto-restart workers with persistently broken pipes (V3.4) ──
+    Invoke-PipeRecovery | Out-Null
 
     # ── Step 4.6: Rolling restart for workers >24h (V3.2) ──
     if ($ws.pool -and $ws.pool.workers -and $ws.total -gt 0) {
@@ -856,7 +942,7 @@ try {
     $script:iterationCount = 0
     $script:loopStart      = Get-Date
 
-    Log "Guardian V3.3 daemon started — perpetual mode (restart at <${script:restartMemPct}% free or ${script:maxIterations} iterations)"
+    Log "Guardian V3.4 daemon started — perpetual mode + pipe-auto-recovery (restart at <${script:restartMemPct}% free or ${script:maxIterations} iterations)"
 
     while ($true) {
         $script:iterationCount++

@@ -135,6 +135,47 @@ function Invoke-MaintenanceCommand {
     Log "[$CmdId] MAINTENANCE command: $stdout"
 }
 
+function Invoke-WslTcpProxy {
+    <#.SYNOPSIS V3.5: Proxy type=wsl through TCP to bridge_agent wsl_pool.
+    When sandbox VM has no tap0 network, this is the bridge between queue.txt
+    (always available via 9P) and wsl_pool's persistent wsl.exe (~5ms).
+    On success writes result file and returns $true. On failure returns $false.
+    #>
+    param([string]$CmdId, [string]$RawCmd, [int]$Timeout)
+
+    # Build TCP request for bridge_agent
+    $tcpReq = @{cmd_id=$CmdId; command=$RawCmd; type="wsl"; timeout=$Timeout} | ConvertTo-Json -Compress
+    try {
+        $sock = New-Object System.Net.Sockets.TcpClient
+        $sock.Connect("127.0.0.1", 19850)
+        $sw = New-Object System.IO.StreamWriter($sock.GetStream(), $script:utf8)
+        $sw.AutoFlush = $true
+        $sr = New-Object System.IO.StreamReader($sock.GetStream(), $script:utf8)
+
+        $t0 = Get-Date
+        $sw.WriteLine($tcpReq)
+        $resp = $sr.ReadLine()
+        $sock.Close()
+
+        if (-not $resp) { return $false }
+        $result = $resp | ConvertFrom-Json
+        $elapsed = [int]((Get-Date) - $t0).TotalMilliseconds
+
+        # Write result in standard format so sandbox can read it
+        $resultObj = New-CommandResult -CmdId $CmdId -ExitCode ([int]$result.exit_code) `
+            -Stdout ($result.stdout) -Stderr ($result.stderr) `
+            -DurationMs $elapsed -Error ""
+        Write-CommandResult -Result $resultObj -Directory $script:baseDir
+        Reset-QueueToIdle -Path $script:queueFile
+        Log "[$CmdId] WSL-TCP-PROXY OK — ${elapsed}ms via wsl_pool"
+        return $true
+    } catch {
+        try { $sock.Close() } catch {}
+        Log "[$CmdId] WSL-TCP-PROXY failed ($($_.Exception.Message)) — falling back to subprocess"
+        return $false
+    }
+}
+
 function Invoke-InprocessFallback {
     <#.SYNOPSIS Execute command in-process when no worker is available.#>
     param([string]$CmdId, [string]$RawCmd, [string]$Ctype, [int]$Timeout)
@@ -143,6 +184,16 @@ function Invoke-InprocessFallback {
     if ($Ctype -eq "maintenance") {
         Invoke-MaintenanceCommand -CmdId $CmdId -RawCmd $RawCmd -StartTime (Get-Date)
         return
+    }
+
+    # V3.5: TCP proxy for type=wsl — route through bridge_agent wsl_pool
+    # when no wsl_1 worker is available. Sandbox VM has no tap0 network,
+    # so this proxy bridges queue.txt (9P) to bridge_agent TCP (localhost).
+    if ($Ctype -eq "wsl" -or $Ctype -eq "w") {
+        if (Invoke-WslTcpProxy -CmdId $CmdId -RawCmd $RawCmd -Timeout $Timeout) {
+            return
+        }
+        # TCP proxy failed — fall through to subprocess wsl.exe
     }
 
     $subT0 = Get-Date

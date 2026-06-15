@@ -210,6 +210,18 @@ while ($true) {
             # 5f. Maintenance command (set/clear/check lock — in-process, no worker)
             if ($ctype -eq "maintenance") { Invoke-MaintenanceCommand -CmdId $cid -RawCmd $cmd -StartTime $t0; continue }
 
+            # 5f.5 V3.5: WSL TCP proxy — when sandbox VM has no tap0 network,
+            # route type=wsl through bridge_agent TCP (localhost:19850) to use
+            # persistent wsl_pool (~5ms) instead of cold wsl subprocess (~60ms+).
+            if ($ctype -eq "wsl" -or $ctype -eq "w") {
+                Write-Text -path $script:queueFile -content "{`"state`":`"running`",`"cmd_id`":`"$cid`"}"
+                if (Invoke-WslTcpProxy -CmdId $cid -RawCmd $rawCmd -Timeout $origTimeout) {
+                    Add-ContentDedup -CmdText $rawCmd -CmdId $cid
+                    continue
+                }
+                # TCP proxy failed — fall through to pipe dispatch
+            }
+
             # 5g. Mark running
             Write-Text -path $script:queueFile -content "{`"state`":`"running`",`"cmd_id`":`"$cid`"}"
 

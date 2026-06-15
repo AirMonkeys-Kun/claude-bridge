@@ -132,16 +132,25 @@ function Apply-Rules {
     $newType = $Type
     $applied = @()
     foreach ($rule in $rules) {
-        if ($rule.is_template -or $rule.disabled) { continue }
+        # V4: active===false means human explicitly disabled this rule. Never apply it.
+        # Previous code only checked .disabled, missing .active=false which was the
+        # standard field used by manual disable workflow. This caused manually-disabled
+        # rules to still fire (e.g. auto-cmd-escape-ampersand).
+        if ($rule.is_template -or $rule.disabled -or $rule.active -eq $false) { continue }
         $triggers = $rule.triggers
         if (-not $triggers) { continue }
+
+        # V4: Strict per-type scoping. Rules designed for one executor MUST NOT
+        # be applied to another. cmd rules don't apply to wsl, powershell rules don't
+        # apply to cmd, etc. "any" type still allowed for genuinely universal rules.
         $typeMatch = $false
         if ($triggers.type -eq "any") { $typeMatch = $true }
         elseif ($triggers.type -eq $newType) { $typeMatch = $true }
-        elseif ($triggers.type -eq "cmd" -and ($newType -eq "c" -or $newType -eq "cmd")) { $typeMatch = $true }
-        elseif ($triggers.type -eq "powershell" -and ($newType -eq "p" -or $newType -eq "powershell")) { $typeMatch = $true }
-        elseif ($triggers.type -eq "wsl" -and ($newType -eq "w" -or $newType -eq "wsl")) { $typeMatch = $true }
-        elseif ($triggers.type -eq "inline" -and ($newType -eq "i" -or $newType -eq "__INLINE__")) { $typeMatch = $true }
+        # Short canonical aliases (backward compat with V2 queue types)
+        elseif ($triggers.type -eq "cmd" -and $newType -in @("c","cmd")) { $typeMatch = $true }
+        elseif ($triggers.type -eq "powershell" -and $newType -in @("p","powershell")) { $typeMatch = $true }
+        elseif ($triggers.type -eq "wsl" -and $newType -in @("w","wsl")) { $typeMatch = $true }
+        elseif ($triggers.type -eq "inline" -and $newType -in @("i","__INLINE__")) { $typeMatch = $true }
         if (-not $typeMatch) { continue }
         if ($triggers.command_contains -and $modified -notmatch [regex]::Escape($triggers.command_contains)) { continue }
         if ($triggers.pattern_in_command -and $modified -notmatch $triggers.pattern_in_command) { continue }
@@ -206,8 +215,11 @@ function Log-ExecutionError {
     }
     if (-not $hasRealError) { return $null }
     $patternSignatures = @()
+    # V4: REMOVED ampersand_in_cmd — && is NATIVE cmd.exe syntax and never the
+    # cause of a cmd failure. The original pattern was learned from PowerShell
+    # failures misattributed to cmd mode. This incorrect signature spawned the
+    # harmful auto-cmd-escape-ampersand rule.
     if ($Type -eq "cmd" -or $Type -eq "c") {
-        if ($Command -match '&&') { $patternSignatures += "ampersand_in_cmd" }
         if ($Command -match '\|') { $patternSignatures += "pipe_in_cmd" }
     }
     if ($Type -eq "powershell" -or $Type -eq "p" -or $Type -eq "wsl" -or $Type -eq "w") {
@@ -302,17 +314,23 @@ function Generate-Rules {
     $errors = $history.errors
     $autoGenCount = [int]$history.auto_generated_rules
     $rules = Get-Rules -ForceReload
-    $existingRuleIds = @{}; foreach ($r in $rules) { $existingRuleIds[$r.id] = $true }
+    $existingRuleIds = @{}; foreach ($r in $rules) {
+        # V4: Skip manually-overridden rules — human already judged them harmful.
+        # They can never be re-generated or re-activated.
+        if ($r.manual_override) { continue }
+        $existingRuleIds[$r.id] = $true
+    }
     $candidates = @()
     $clixmlCount = ($errors | Where-Object { $_.clixml_stripped -eq $true }).Count
     if ($clixmlCount -ge 10 -and -not $existingRuleIds.ContainsKey("clixml-stderr-filter")) {
         $candidates += @{id="clixml-stderr-filter"; description="Auto-filter CLIXML stderr noise"; triggers=@{type="any"}; fix=@{action="clixml_filter"}; confidence=[Math]::Min(100,$clixmlCount*5); hits=0; auto_generated=$true; generation_source="clixml $clixmlCount times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
     }
-    $ampersandErrors = $errors | Where-Object { $_.patterns -contains "ampersand_in_cmd" -or ($_.type -in @("cmd","c") -and $_.command_summary -match '&&') }
-    $hasAmpersandRule = $existingRuleIds.ContainsKey("auto-cmd-escape-ampersand") -or $existingRuleIds.ContainsKey("cmd-escape-ampersand")
-    if ($ampersandErrors.Count -ge 1 -and -not $hasAmpersandRule) {
-        $candidates += @{id="auto-cmd-escape-ampersand"; description="Escape && in cmd mode"; triggers=@{type="cmd"; pattern_in_command="&&"}; fix=@{action="escape"; find="&&"; replace_with="^&^&"}; confidence=[Math]::Min(100,$ampersandErrors.Count*30); hits=0; auto_generated=$true; generation_source="ampersand $($ampersandErrors.Count) times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
-    }
+    # V4: REMOVED auto-cmd-escape-ampersand candidate. This rule was proven harmful:
+    # (1) && in cmd.exe is NATIVE syntax — no escape needed
+    # (2) The error pattern came from PowerShell's && rejection, misattributed to cmd
+    # (3) The fix (&& → ^&^&) destroyed the AND operator, turning it into literal text
+    # Historical reference: auto-cmd-escape-ampersand generated 2026-06-11, manually
+    # disabled 2026-06-15, permanently deleted 2026-06-15.
     $semicolonWslErrors = $errors | Where-Object { $_.patterns -contains "semicolon_in_ps_wsl" -or ($_.patterns -contains "semicolon_in_cmd" -and $_.command_summary -match "wsl") }
     if ($semicolonWslErrors.Count -ge 1 -and -not $existingRuleIds.ContainsKey("auto-pswsl-semicolon-quote")) {
         $candidates += @{id="auto-pswsl-semicolon-quote"; description="Single-quote bash -c for WSL"; triggers=@{type="powershell"; command_contains="wsl -e bash -c"; pattern_in_command=";"}; fix=@{action="wrap_single_quotes"}; confidence=[Math]::Min(100,$semicolonWslErrors.Count*30); hits=0; auto_generated=$true; generation_source="semicolon $($semicolonWslErrors.Count) times"; created=(Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")}
@@ -341,9 +359,23 @@ function Generate-Rules {
     }
     $toAdd = @()
     foreach ($cand in $candidates) {
+        # V4: Before regenerating, check if this rule was manually overridden.
+        # Human-disabled rules have manual_override=true — they are NEVER
+        # automatically re-activated regardless of confidence.
+        $existingRule = $rules | Where-Object { $_.id -eq $cand.id } | Select-Object -First 1
+        if ($existingRule -and $existingRule.manual_override) {
+            RE-Log "GEN" "BLOCKED: $($cand.id) — manual_override is set (human permanently disabled)"
+            continue
+        }
         $cand.test_results = Test-RuleAgainstHistory -Rule $cand -Errors $errors
         if ($cand.test_results.passed) {
             $cand.confidence = [Math]::Min(100, $cand.confidence + $cand.test_results.bonus)
+            # V4: Record the PS version and bash version when this rule was learned,
+            # so future maintainers can trace which executor version the rule applies to.
+            $cand.version_tag = @{
+                ps_version = $PSVersionTable.PSVersion.ToString()
+                created_at = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff")
+            }
             if ($cand.confidence -ge 50) { $cand.active = $true; RE-Log "GEN" "ACTIVATED: $($cand.id) conf=$($cand.confidence)" }
             else { $cand.active = $false; RE-Log "GEN" "CANDIDATE: $($cand.id) conf=$($cand.confidence) (low)" }
             $toAdd += $cand

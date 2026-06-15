@@ -59,12 +59,17 @@ queue.txt 文件桥延迟 ~120-200ms, TCP 直连 ~5-15ms。检查你的 bridge_c
 
 | 通道 | 延迟 | 使用条件 |
 |------|------|----------|
-| **wsl_pool** (type=wsl + TCP) | **~5ms** | 沙箱连 bridge_agent TCP :19850 |
-| **pipe fast_path** (type=powershell + TCP) | **~17ms** | 同上, PS 脚本 |
-| **pipe cmd** (type=cmd + TCP) | **~25ms** | 同上, cmd 命令 |
-| **pipe subprocess** (type=generic + TCP) | **~150ms** | 同上, 避免使用 |
-| **queue fallback** (any type + file) | **~120ms** | TCP 不可用时的降级 |
+| **wsl_pool TCP** (沙箱直接 TCP :19850) | **~5ms** | 沙箱有 tap0 网卡时直连 |
+| **wsl_pool via TCP proxy** (queue.txt → watcher → localhost → wsl_pool) | **~10ms** | 沙箱**无网**时的自动路由 (V3.5.1) |
+| **pipe fast_path** (type=powershell) | **~17ms** | TCP 通道可用 |
+| **pipe cmd** (type=cmd) | **~25ms** | TCP 通道可用 |
+| **pipe subprocess** (type=generic) | **~150ms** | TCP 通道可用, 避免使用 |
+| **queue fallback** (file bridge) | **~120ms** | TCP 不可用时的降级 |
 | **纯文件桥** (旧) | **~200ms** | 最慢, 仅兜底 |
+
+> **关键**: 即使沙箱 VM 没有 tap0 网络，watcher 会自动通过 `localhost:19850`
+> (宿主机内部 TCP) 把 type=wsl 命令转发给 bridge_agent 的 wsl_pool。
+> 你不需要做任何特殊处理——正常写 queue.txt 用 type=wsl 就行。
 
 ---
 

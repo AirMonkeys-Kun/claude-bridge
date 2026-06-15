@@ -21,6 +21,20 @@ function Add-ContentDedup {
     }
 }
 
+function Clear-ContentDedup {
+    <#.SYNOPSIS V3.5.3: Clear dedup entry for a specific cmd_id.
+    Used during watcher crash recovery to prevent stale dedup from blocking retry.#>
+    param([string]$CmdId)
+    try {
+        $toRemove = @()
+        foreach ($k in $script:contentDedup.Keys) {
+            if ($script:contentDedup[$k].cmd_id -eq $CmdId) { $toRemove += $k }
+        }
+        foreach ($k in $toRemove) { $script:contentDedup.Remove($k) }
+        if ($toRemove.Count -gt 0) { Log "[DEDUP] Cleared $($toRemove.Count) entries for $CmdId" }
+    } catch {}
+}
+
 function Get-ContentDedup {
     <#.SYNOPSIS Look up command content hash. Returns $null if no hit or expired.#>
     param([string]$CmdText)

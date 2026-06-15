@@ -135,16 +135,17 @@ function Invoke-MaintenanceCommand {
     Log "[$CmdId] MAINTENANCE command: $stdout"
 }
 
-function Invoke-WslTcpProxy {
-    <#.SYNOPSIS V3.5: Proxy type=wsl through TCP to bridge_agent wsl_pool.
-    When sandbox VM has no tap0 network, this is the bridge between queue.txt
-    (always available via 9P) and wsl_pool's persistent wsl.exe (~5ms).
+function Invoke-TcpProxyBridge {
+    <#.SYNOPSIS V3.5.3: Proxy ANY type through TCP to bridge_agent.
+    Routes commands through localhost:19850 → bridge_agent executes via
+    wsl_pool (type=wsl, ~5ms), pipe dispatch (type=powershell/cmd, ~17ms),
+    or subprocess (generic, ~150ms). Always faster than cold subprocess fallback.
     On success writes result file and returns $true. On failure returns $false.
     #>
-    param([string]$CmdId, [string]$RawCmd, [int]$Timeout)
+    param([string]$CmdId, [string]$RawCmd, [string]$Ctype, [int]$Timeout)
 
-    # Build TCP request for bridge_agent
-    $tcpReq = @{cmd_id=$CmdId; command=$RawCmd; type="wsl"; timeout=$Timeout} | ConvertTo-Json -Compress
+    # Build TCP request for bridge_agent — pass through original type
+    $tcpReq = @{cmd_id=$CmdId; command=$RawCmd; type=$Ctype; timeout=$Timeout} | ConvertTo-Json -Compress
     try {
         $sock = New-Object System.Net.Sockets.TcpClient
         $sock.Connect("127.0.0.1", 19850)
@@ -167,11 +168,11 @@ function Invoke-WslTcpProxy {
             -DurationMs $elapsed -Error ""
         Write-CommandResult -Result $resultObj -Directory $script:baseDir
         Reset-QueueToIdle -Path $script:queueFile
-        Log "[$CmdId] WSL-TCP-PROXY OK — ${elapsed}ms via wsl_pool"
+        Log "[$CmdId] TCP-PROXY OK — ${elapsed}ms ch=$($result.dispatch_channel)"
         return $true
     } catch {
         try { $sock.Close() } catch {}
-        Log "[$CmdId] WSL-TCP-PROXY failed ($($_.Exception.Message)) — falling back to subprocess"
+        Log "[$CmdId] TCP-PROXY failed ($($_.Exception.Message)) — falling back to pipe/subprocess"
         return $false
     }
 }
@@ -190,7 +191,7 @@ function Invoke-InprocessFallback {
     # when no wsl_1 worker is available. Sandbox VM has no tap0 network,
     # so this proxy bridges queue.txt (9P) to bridge_agent TCP (localhost).
     if ($Ctype -eq "wsl" -or $Ctype -eq "w") {
-        if (Invoke-WslTcpProxy -CmdId $CmdId -RawCmd $RawCmd -Timeout $Timeout) {
+        if (Invoke-TcpProxyBridge -CmdId $CmdId -RawCmd $RawCmd -Ctype $Ctype -Timeout $Timeout) {
             return
         }
         # TCP proxy failed — fall through to subprocess wsl.exe

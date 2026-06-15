@@ -113,7 +113,19 @@ if (-not $existing) {
     Reset-QueueToIdle -Path $script:queueFile
     Log "Queue created (no existing file)"
 } elseif ($existing.state -eq "pending") {
-    Log "Pending command preserved: $($existing.cmd_id) / $($existing.command)"
+    # V3.5.3: Pending command from previous watcher instance — keep it,
+    # the main loop will pick it up on first iteration.
+    Log "Pending command recovered from previous watcher: $($existing.cmd_id)"
+} elseif ($existing.state -eq "running") {
+    # V3.5.3: Watcher died mid-execution (e.g., memory-pressure guardian restart).
+    # Reset to pending so the main loop retries. Also clear dedup for this cmd_id
+    # so the retry isn't blocked by the stale dedup cache entry.
+    $recoveredCid = $existing.cmd_id
+    Reset-QueueToIdle -Path $script:queueFile
+    Clear-ContentDedup -CmdId $recoveredCid
+    Log "RECOVERED crashed command: $recoveredCid — will retry on next cycle"
+    # Re-write as pending so main loop picks it up
+    Write-Text -path $script:queueFile -content "{`"state`":`"pending`",`"cmd_id`":`"$recoveredCid`",`"command`":`"$($existing.command)`",`"type`":`"$($existing.type)`",`"timeout`":`"$($existing.timeout)`"}"
 } else {
     Reset-QueueToIdle -Path $script:queueFile
     Log "Queue reset from state=$($existing.state)"
@@ -210,12 +222,14 @@ while ($true) {
             # 5f. Maintenance command (set/clear/check lock — in-process, no worker)
             if ($ctype -eq "maintenance") { Invoke-MaintenanceCommand -CmdId $cid -RawCmd $cmd -StartTime $t0; continue }
 
-            # 5f.5 V3.5: WSL TCP proxy — when sandbox VM has no tap0 network,
-            # route type=wsl through bridge_agent TCP (localhost:19850) to use
-            # persistent wsl_pool (~5ms) instead of cold wsl subprocess (~60ms+).
-            if ($ctype -eq "wsl" -or $ctype -eq "w") {
+            # 5f.5 V3.5.3: TCP proxy bridge — ALL types go through bridge_agent TCP
+            # first. Sandbox VM has no tap0 network; this proxy bridges queue.txt
+            # (9P) to bridge_agent TCP (localhost:19850). For type=wsl → wsl_pool
+            # (~5ms); type=powershell/cmd → pipe dispatch (~17ms); generic →
+            # subprocess (~150ms). Always faster than cold subprocess fallback.
+            if ($ctype -ne "__INLINE__" -and $ctype -ne "user" -and $ctype -ne "maintenance") {
                 Write-Text -path $script:queueFile -content "{`"state`":`"running`",`"cmd_id`":`"$cid`"}"
-                if (Invoke-WslTcpProxy -CmdId $cid -RawCmd $rawCmd -Timeout $origTimeout) {
+                if (Invoke-TcpProxyBridge -CmdId $cid -RawCmd $rawCmd -Ctype $ctype -Timeout $origTimeout) {
                     Add-ContentDedup -CmdText $rawCmd -CmdId $cid
                     continue
                 }

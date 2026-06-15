@@ -593,7 +593,7 @@ function Invoke-WorkerReplenish {
     $expectedPlan = @(
         @{type="generic"; count=6}, @{type="file"; count=4},
         @{type="process"; count=2}, @{type="system"; count=2},
-        @{type="wsl"; count=1}, @{type="user"; count=1}
+        @{type="user"; count=1}
     )
 
     # Build a map of present worker IDs

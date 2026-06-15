@@ -127,7 +127,6 @@ if ($DeployAll) {
             @{type="file"; count=4},
             @{type="process"; count=2},
             @{type="system"; count=2},
-            @{type="wsl"; count=1},
             @{type="user"; count=1}
         )
     }

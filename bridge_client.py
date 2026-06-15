@@ -30,6 +30,59 @@ import uuid
 BRIDGE_HOST = os.environ.get("BRIDGE_HOST", "172.16.10.254")
 BRIDGE_PORT = int(os.environ.get("BRIDGE_PORT", "19850"))
 TCP_TIMEOUT = 5  # seconds to connect
+TCP_FAST_RETRY_MS = int(os.environ.get("BRIDGE_FAST_RETRY_MS", "200"))
+
+# V3.5: Connection pool — reuse one persistent TCP socket across commands.
+# bridge_agent supports multiple commands on one connection (while-loop in
+# handle_client). A 3-tuple of (socket, reader, lock) cached per process.
+_pooled_sock = None
+_pooled_reader = None
+_pooled_lock = None
+
+
+def _get_pooled_connection(host=BRIDGE_HOST, port=BRIDGE_PORT):
+    """Return (sock, reader) tuple from connection pool, creating if needed."""
+    import threading
+    global _pooled_sock, _pooled_reader, _pooled_lock
+    if _pooled_lock is None:
+        _pooled_lock = threading.Lock()
+
+    with _pooled_lock:
+        if _pooled_sock is not None:
+            try:
+                # Quick liveness check — peek without consuming
+                _pooled_sock.settimeout(0.1)
+                _pooled_sock.recv(1, socket.MSG_PEEK)
+                _pooled_sock.settimeout(30)
+                return _pooled_sock, _pooled_reader
+            except (socket.timeout, ConnectionError, OSError):
+                # Stale — close and recreate
+                try:
+                    _pooled_sock.close()
+                except OSError:
+                    pass
+
+        # Create new connection
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(TCP_TIMEOUT)
+        sock.connect((host, port))
+        _pooled_sock = sock
+        _pooled_reader = sock.makefile("r", encoding="utf-8")
+        return _pooled_sock, _pooled_reader
+
+
+def _close_pooled_connection():
+    """Close and clear the pooled connection."""
+    global _pooled_sock, _pooled_reader
+    if _pooled_lock:
+        with _pooled_lock:
+            if _pooled_sock:
+                try:
+                    _pooled_sock.close()
+                except OSError:
+                    pass
+                _pooled_sock = None
+                _pooled_reader = None
 
 
 def _auto_detect_bridge_dir():
@@ -66,49 +119,51 @@ def tcp_send_command(cmd, host=BRIDGE_HOST, port=BRIDGE_PORT, timeout=None):
 
     actual_timeout = timeout or cmd.get("timeout", 30)
     # TCP-level timeout = connect timeout; we'll wait longer for the response
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(actual_timeout + 15)  # total timeout including wait
+    # V3.5: Try pooled connection first, fall back to fresh connect
+    pooled_sock = None
+    pooled_reader = None
+    try:
+        pooled_sock, pooled_reader = _get_pooled_connection(host, port)
+    except Exception:
+        _close_pooled_connection()
+        pooled_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        pooled_sock.settimeout(TCP_TIMEOUT)
+        pooled_sock.connect((host, port))
+        pooled_reader = pooled_sock.makefile("r", encoding="utf-8")
 
     try:
-        sock.settimeout(TCP_TIMEOUT)
-        sock.connect((host, port))
-
         # Send command + newline
         payload = json.dumps(cmd, ensure_ascii=False) + "\n"
-        sock.sendall(payload.encode("utf-8"))
+        pooled_sock.sendall(payload.encode("utf-8"))
 
         # Read response (newline-delimited)
-        sock.settimeout(actual_timeout + 15)
-        buf = b""
-        while True:
-            chunk = sock.recv(4096)
-            if not chunk:
-                raise ConnectionError("Connection closed before response")
-            buf += chunk
-            if b"\n" in buf:
-                line, _ = buf.split(b"\n", 1)
-                return json.loads(line.decode("utf-8"))
+        pooled_sock.settimeout(actual_timeout + 15)
+        line = pooled_reader.readline()
+        if not line:
+            _close_pooled_connection()
+            raise ConnectionError("Connection closed before response")
+        return json.loads(line.strip())
 
-    except socket.timeout:
+    except (socket.timeout, ConnectionError, ConnectionRefusedError) as e:
+        _close_pooled_connection()
+        err_type = ("tcp_timeout" if isinstance(e, socket.timeout)
+                    else "tcp_refused" if isinstance(e, ConnectionRefusedError)
+                    else "tcp_error")
+        err_msg = ("[TCP TIMEOUT]" if err_type == "tcp_timeout"
+                   else "[TCP CONNECTION REFUSED]" if err_type == "tcp_refused"
+                   else str(e))
         return {
             "state": "error", "cmd_id": cmd.get("cmd_id", ""),
-            "exit_code": -1, "stdout": "", "stderr": "[TCP TIMEOUT]",
-            "error": "tcp_timeout", "duration_ms": 0,
-        }
-    except ConnectionRefusedError:
-        return {
-            "state": "error", "cmd_id": cmd.get("cmd_id", ""),
-            "exit_code": -1, "stdout": "", "stderr": "[TCP CONNECTION REFUSED]",
-            "error": "tcp_refused", "duration_ms": 0,
+            "exit_code": -1, "stdout": "", "stderr": err_msg,
+            "error": err_type, "duration_ms": 0,
         }
     except Exception as e:
+        _close_pooled_connection()
         return {
             "state": "error", "cmd_id": cmd.get("cmd_id", ""),
             "exit_code": -1, "stdout": "", "stderr": str(e),
             "error": "tcp_error", "duration_ms": 0,
         }
-    finally:
-        sock.close()
 
 
 def tcp_ping(host=BRIDGE_HOST, port=BRIDGE_PORT):
@@ -200,8 +255,18 @@ def send_command(cmd, force_fallback=False):
     result = tcp_send_command(cmd)
     elapsed = (time.monotonic() - t0) * 1000
 
-    # If TCP failed, try file fallback
+    # V3.5: One fast TCP retry before expensive file fallback.
+    # bridge_agent may have restarted (watchdog cycle ~30s) or a transient
+    # network blip. A 200ms wait + reconnect is much cheaper than a full
+    # file fallback (~200ms total with polling).
     if result.get("error") in ("tcp_refused", "tcp_timeout", "tcp_error"):
+        time.sleep(TCP_FAST_RETRY_MS / 1000.0)
+        _close_pooled_connection()
+        retry_result = tcp_send_command(cmd)
+        if retry_result.get("error") not in ("tcp_refused", "tcp_timeout", "tcp_error"):
+            return retry_result, "tcp_retry"
+
+        # Both TCP attempts failed — fall back to file
         result["tcp_fallback"] = True
         result["tcp_error"] = result.get("stderr", "")
         result["tcp_ms"] = int(elapsed)

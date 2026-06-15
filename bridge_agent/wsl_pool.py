@@ -55,7 +55,8 @@ class _WslProc:
         self._proc = None
         self._stdin = None
         self._stdout = None
-        self._stderr_buf = None  # drained on demand; not per-command
+        self._stderr_lines = []     # V3.5: captured stderr buffer
+        self._stderr_lock = threading.Lock()
         self._cmd_count = 0
         self._last_used = 0.0
         self._restarting = False
@@ -86,7 +87,7 @@ class _WslProc:
             self._proc = None
 
     def _drain_stderr(self):
-        """Background thread: consume stderr continuously, discard content."""
+        """Background thread: consume stderr continuously, capture to buffer."""
         if not self._proc or not self._proc.stderr:
             return
         try:
@@ -94,9 +95,20 @@ class _WslProc:
                 line = self._proc.stderr.readline()
                 if not line:
                     break
-                # discard — could log if needed for debugging
+                # V3.5: capture stderr for per-command return instead of discarding
+                with self._stderr_lock:
+                    self._stderr_lines.append(line)
+                    if len(self._stderr_lines) > 200:
+                        self._stderr_lines = self._stderr_lines[-100:]
         except OSError:
             pass
+
+    def _snapshot_stderr(self):
+        """V3.5: return captured stderr lines since last exec() call."""
+        with self._stderr_lock:
+            lines = list(self._stderr_lines)
+            self._stderr_lines.clear()
+        return "".join(lines)
 
     def _readline_with_timeout(self, timeout_s):
         """
@@ -148,12 +160,12 @@ class _WslProc:
             self._start()
 
     def exec(self, command, timeout=30):
-        """Execute a command. Returns dict with exit_code, stdout, stderr (empty), duration_ms."""
+        """Execute a command. Returns dict with exit_code, stdout, stderr, duration_ms."""
         with self._lock:
             self._restart_if_dead()
             if not self.is_alive():
                 return {
-                    "exit_code": -1, "stdout": "", "stderr": "",
+                    "exit_code": -1, "stdout": "", "stderr": self._snapshot_stderr(),
                     "error": "wsl_process_unavailable",
                     "duration_ms": 0,
                 }
@@ -171,7 +183,7 @@ class _WslProc:
                 _log(f"[{self.name}] stdin write failed: {e} — restarting")
                 self._start()
                 return {
-                    "exit_code": -1, "stdout": "", "stderr": "",
+                    "exit_code": -1, "stdout": "", "stderr": self._snapshot_stderr(),
                     "error": f"stdin_write_failed: {e}",
                     "duration_ms": int((time.monotonic() - t0) * 1000),
                 }
@@ -224,7 +236,7 @@ class _WslProc:
                 return {
                     "exit_code": -1,
                     "stdout": "".join(output_lines),
-                    "stderr": "",
+                    "stderr": self._snapshot_stderr(),
                     "error": "timeout_or_eof",
                     "duration_ms": elapsed_ms,
                 }
@@ -232,7 +244,7 @@ class _WslProc:
             return {
                 "exit_code": exit_code,
                 "stdout": "".join(output_lines),
-                "stderr": "",
+                "stderr": self._snapshot_stderr(),
                 "error": "",
                 "duration_ms": elapsed_ms,
             }
@@ -246,7 +258,7 @@ class WslPool:
     process is simpler and avoids WSL2's per-instance ~50MB memory cost.
     """
 
-    def __init__(self, pool_size=1):
+    def __init__(self, pool_size=2):
         self._size = pool_size
         self._procs = []
         self._rr_idx = 0
@@ -283,6 +295,6 @@ def get_pool():
     if _pool_singleton is None:
         with _pool_init_lock:
             if _pool_singleton is None:
-                _pool_singleton = WslPool(pool_size=1)
-                _log(f"WslPool initialized (size=1)")
+                _pool_singleton = WslPool()
+                _log(f"WslPool initialized (size={_pool_singleton._size})")
     return _pool_singleton

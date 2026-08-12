@@ -105,11 +105,12 @@ class Bridge:
         self._tcp_lock = threading.Lock()
         self._tcp_sock = None
         self._tcp_reader = None
+        self._queue_lock = threading.Lock()  # serialize queue.txt writes
 
     # ── Path detection ──────────────────────────────────────────────
 
-    def _has_tcp(self, timeout=1.0):
-        """Check if TCP direct to bridge_agent is available."""
+    def _has_tcp(self, timeout=0.3):
+        """Check if TCP direct to bridge_agent is available. Fast fail."""
         if self._tcp_available is not None:
             return self._tcp_available
         try:
@@ -141,7 +142,9 @@ class Bridge:
         if cmd_id is None:
             cmd_id = f"cmd_{uuid.uuid4().hex[:10]}"
 
-        if self._has_tcp(timeout=1.0):
+        # Fast probe: 0.3s TCP test. If available, use it.
+        # Fallback: queue.txt proxy (V3.5.3 watcher routes through localhost TCP)
+        if self._has_tcp(timeout=0.3):
             return self._exec_tcp(command, type, timeout, cmd_id)
         elif self._bridge_dir:
             return self._exec_queue_proxy(command, type, timeout, cmd_id)
@@ -185,8 +188,8 @@ class Bridge:
     def _exec_queue_proxy(self, command, type, timeout, cmd_id):
         """
         Queue proxy path: write queue.txt → watcher TCP proxy → result file.
-        V3.5.1 watcher routes type=wsl through wsl_pool (~10ms).
-        Falls back to cold subprocess if TCP proxy fails.
+        V3.5.3 watcher routes ALL types through localhost TCP proxy.
+        Handles queue contention by waiting for idle state before writing.
         """
         qpath = os.path.join(self._bridge_dir, "queue.txt")
         rpath = os.path.join(self._bridge_dir, f"r_{cmd_id}.json")
@@ -197,20 +200,31 @@ class Bridge:
             "command": command, "type": type, "timeout": timeout
         }, ensure_ascii=False)
 
-        # Write to queue (fsync to force 9P flush)
-        try:
-            with open(qpath, "w", encoding="utf-8") as f:
-                f.write(pending)
-                f.flush()
-                os.fsync(f.fileno())
-        except OSError as e:
-            return BridgeResult(cmd_id, -1, "", str(e), 0, "queue_error", str(e))
+        # Wait for queue to become idle (max 5s) before writing
+        with self._queue_lock:
+            wait_deadline = time.monotonic() + 5
+            while time.monotonic() < wait_deadline:
+                try:
+                    with open(qpath, "r", encoding="utf-8") as f:
+                        current = json.load(f)
+                    if current.get("state") == "idle":
+                        break
+                except (FileNotFoundError, json.JSONDecodeError):
+                    break
+                time.sleep(0.05)  # 50ms wait for queue to free up
 
-        # V3.5.2: Adaptive polling — fast initial checks, then back off.
-        # Expected wsl via TCP proxy: ~10ms → result within 2 polls.
-        # Expected pipe dispatch: ~30ms → result within 5 polls.
+            # Write to queue (fsync to force 9P flush)
+            try:
+                with open(qpath, "w", encoding="utf-8") as f:
+                    f.write(pending)
+                    f.flush()
+                    os.fsync(f.fileno())
+            except OSError as e:
+                return BridgeResult(cmd_id, -1, "", str(e), 0, "queue_error", str(e))
+
+        # V3.5.3: Adaptive polling — fast initial checks.
         deadline = time.monotonic() + timeout + 15
-        poll_ms = 5  # start at 5ms, ramp up
+        poll_ms = 5
 
         while time.monotonic() < deadline:
             try:
@@ -230,7 +244,7 @@ class Bridge:
                 pass
 
             time.sleep(poll_ms / 1000.0)
-            poll_ms = min(poll_ms + 5, 100)  # 5→10→15→...→100ms max
+            poll_ms = min(poll_ms + 5, 100)
 
         elapsed = int((time.monotonic() - t0) * 1000)
         return BridgeResult(cmd_id, -1, "", f"timeout after {elapsed}ms", elapsed, "timeout", "timeout")

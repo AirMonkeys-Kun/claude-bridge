@@ -327,3 +327,122 @@ $ df -h /
 
 *文档创建日期: 2026-06-01*
 *关联: 桥接集群 V5、Issue #62430、PS 5.1 陷阱知识库*
+
+---
+
+## 九、回归记录：2026-06-14 — SDK 2.1.170 未同步
+
+**触发**：Claude Desktop 自动更新（USER 上下文），SDK 从 2.1.149 升到 2.1.170。
+
+**症状**：`mcp__workspace__bash` 报 `Workspace still starting`，VM 日志 `SDK version 2.1.170 not verified`。
+
+**根因**：
+- MSIX 存储（USER 可见）已更新到 2.1.170
+- 非 MSIX 路径（cowork-svc 读的）还停留在上次手动复制的 2.1.149
+- cowork-svc 在非 MSIX 路径找不到 2.1.170 → "not verified"
+
+**诊断命令**（通过 bridge `queue.txt`，type=user，因为要看 MSIX 存储；USER worker 的 stdout 捕获已坏，全程用 `| Out-File` 写文件 workaround）：
+对比 `claude-code-vm` 在 MSIX 存储 vs 非 MSIX 路径下的版本目录。
+
+**修复命令**（一键复制 SDK，890ms 完成）：
+```powershell
+$src='C:\Users\Administrator\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Local\Claude-3p\claude-code-vm'
+$dst='C:\Users\Administrator\AppData\Local\Claude-3p\claude-code-vm'
+Copy-Item "$src\.sdk-version" "$dst\.sdk-version" -Force
+Copy-Item "$src\2.1.170" "$dst\2.1.170" -Recurse -Force
+```
+
+复制后 DST 状态：
+```
+2.1.149\claude    238524112  (旧版，保留无影响)
+2.1.170\claude    247469776  (新版，cowork-svc 读这个)
+.sdk-version      = "2.1.170"
+2.1.170\.verified  0 B
+```
+
+**验证**：`mcp__workspace__bash` 立即恢复，无需重启 cowork-svc。
+
+**为什么这次只用了 890ms**：MSIX 存储 → 非 MSIX 路径都在 `C:\Users\Administrator\AppData\Local\` 下，NTFS 可能用了 CoW/硬链接式复制，没有真正拷 248MB。
+
+**预防**：每次 Claude Desktop 自动更新后，先跑诊断命令对比两条路径的版本目录。可考虑加进 Guardian V3 巡检项（待 Guardian 自愈恢复后）。
+
+**同时发现的 bridge 自身问题（未修复）**：
+1. USER worker stdout 捕获全空（`exit=0, stdout=""`），需要 `| Out-File` workaround
+2. Guardian V3 自 2026-06-09 09:19 后静默，自愈巡检未跑
+3. 系统 32GB 内存长期 <5% free 警告，可能跟 USER worker stdout 故障关联
+4. **fast_path 延迟回归 ~9x**（见下）
+
+### fast_path 延迟回归
+
+`bench_light.ps1`（5 iter，type=powershell，简单 `'PROBE'` 命令）：
+
+| 时间点 | SDK | avg | min | max |
+|---|---|---|---|---|
+| 2026-06-08（更新前） | 2.1.149 | 13ms (历史 bmt 采样) | — | — |
+| 2026-06-14（更新后） | 2.1.170 | **118ms** | 64 | 178 |
+
+fast_path / pipe_direct 仍 ✅ 触发，stdout 正常。功能未坏，仅延迟回归。可能原因：SDK 2.1.170 改了 VirtioFS / Named Pipe 协议；系统内存 5% free 加剧抖动。
+
+**不影响功能**，对日常 bridge 操作（诊断、修 VM、批量文件操作）影响 <1s 级，可暂不处理。等 Claude Desktop 下次更新观察是否自动恢复。
+
+---
+
+## 十、WSL 高速通道：wsl_pool（2026-06-15）
+
+### 背景
+原架构 type=wsl 命令走 worker_generic.ps1 的 subprocess fallback，每次都启动新 `wsl.exe -e bash -c "..."` 进程，冷启动 30-50ms。实测端到端 ~114ms（TCP）/ ~146ms（queue.txt）。
+
+### 实现
+在 bridge_agent（Python）端直接管理一个持久 wsl.exe 子进程，跳过 worker pool：
+
+**新增文件**：
+- `bridge_agent/wsl_pool.py`：`WslPool` 类，单进程串行；stdin/stdout + marker 协议
+- marker 格式：`___WSLEND_<uuid_hex>___ <exit_code>`，每次命令唯一，避免跟用户输出冲突
+
+**修改**：
+- `bridge_agent/dispatch.py` 的 `execute_command()`：`if cmd_type == "wsl"` 优先调 `wsl_pool.exec()`，失败 fallback 到原 pipe/queue 路径
+
+**协议**：
+```
+send:    <user_cmd>; printf '\n___WSLEND_<uuid>___ %s\n' "$?"\n
+receive: <stdout lines>\n___WSLEND_<uuid>___ <exit_code>\n
+```
+
+**stderr**：后台线程持续 drain（避免 pipe 死锁），不返回给调用方（可后续按需加）
+
+**失败处理**：
+- wsl.exe 死亡：自动 `_start()` 重启
+- timeout 或 stdout EOF：重启 wsl.exe，返回 `error: timeout_or_eof`
+- 调用方 fallback：dispatch.py `try/except` 包住，出错继续走 pipe dispatch
+
+### 验证（2026-06-15）
+通过 VM 直接 TCP 到 `172.16.10.254:19850`，`test_wsl_pool.py`：
+
+```
+Step 1: ping → workers_alive=16 watcher=True
+Step 2: 单条 type=wsl → channel=wsl_pool exit=0 dur=61ms
+        stdout='WSL_POOL_OK\nadministrator\nLinux 6.6.114.1-microsoft-standard-WSL2'
+Step 3: 5 iter latency:
+  iter 1-5: worker=0ms total=1.9-4.0ms channel=wsl_pool
+```
+
+### 性能对比
+
+| 路径 | 修复前 | 修复后 | 提升 |
+|---|---|---|---|
+| TCP + wsl worker_ms | 114ms | <1ms | ~150x |
+| TCP + wsl total RTT | ~120ms | 2.5ms avg | ~50x |
+
+实际端到端 2.5ms，比 TCP-MIGRATION-PLAN 预估的 ~20ms 还低一个量级（持久 wsl.exe 让命令执行本身接近零成本）。
+
+### 已知限制 / 后续可做
+1. **pool_size=1（串行）**：单 wsl.exe 一次只处理一条命令。如果未来需要并发 WSL 命令，把 pool_size 改大，round-robin 分发。
+2. **stderr 不返回**：当前丢弃。如果需要，加 per-command stderr buffer（用 marker 配对）。
+3. **readline 阻塞**：`self._stdout.readline()` 没真超时（依赖 bash 命令自身完成）。如果用户发 `sleep 1000` 这种命令，timeout 不能中断 readline。后续可改用 `select` / asyncio。
+4. **bridge_agent 重启会丢持久 wsl.exe**：进程死了 watchdog 重启 bridge_agent，wsl_pool 重新初始化。第一条命令会多 30-60ms（wsl.exe 冷启动）。
+
+### 验证脚本
+- `test_wsl_pool.py`：从 VM TCP 测 bridge_agent 的 type=wsl 路径
+- `bench_light.ps1`：fast_path（type=powershell）延迟基准
+- `bench_wsl.ps1`：原 subprocess fallback 路径基准（queue.txt）
+

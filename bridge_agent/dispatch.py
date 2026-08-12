@@ -320,6 +320,27 @@ def execute_command(cmd):
     cmd_type = cmd["type"]
     timeout = cmd.get("timeout", 30)
 
+    # ── WSL fast path: persistent wsl.exe via wsl_pool (skip worker pool) ──
+    if cmd_type == "wsl":
+        try:
+            from .wsl_pool import get_pool
+            pool_result = get_pool().exec(command, timeout=timeout)
+            result = {
+                "state": "error" if pool_result.get("error") else "done",
+                "cmd_id": cmd_id,
+                "exit_code": pool_result["exit_code"],
+                "stdout": pool_result["stdout"],
+                "stderr": pool_result.get("stderr", ""),
+                "error": pool_result.get("error", ""),
+                "duration_ms": pool_result["duration_ms"],
+                "fast_path": False,
+                "pipe_direct": False,
+                "timestamp": _now_str(),
+            }
+            return result, "wsl_pool"
+        except Exception as e:
+            log(f"  [{cmd_id}] wsl_pool failed ({e}) — falling back to pipe dispatch")
+
     # ── Primary: Named Pipe dispatch with exponential backoff ──────────
     for attempt in range(PIPE_RETRY_ATTEMPTS):
         worker, result = dispatch_via_pipe(cmd_id, command, cmd_type, timeout)

@@ -1,2 +1,0 @@
-2026-06-10 10:33:03.757 | LOG_FAIL: 使用“3”个参数调用“AppendAllText”时发生异常:“文件“D:\zebbingo\tools\claude-bridge\watcher\watcher.log”正由另一进程使用，因此该进程无法访问此文件。”
-2026-06-10 10:33:03.757 | ORIGINAL: [start_sp_1781058783] type=__INLINE__ cmd=wsl -e bash -c 'cd /home/administrator/projects/chatbot && nohup .venv/bin/python -m stage_pool.bot_stage_pool > /tmp/stage_pool.log 2>&1 & echo STAGE_STARTED_PID=' timeout=15s

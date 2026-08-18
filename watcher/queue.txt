@@ -1,1 +1,1 @@
-{"state":"pending","cmd_id":"git_commit_v33","command":"Set-Location D:\\zebbingo\\tools\\claude-bridge; git add -A; git commit -m 'V3.3: guardian perpetual daemon - remove 55s suicide loop, add memory-aware restart'","type":"__INLINE__"}
+{"state":"pending","cmd_id":"p3","command":"echo P3_TEST","type":"wsl","timeout":10}

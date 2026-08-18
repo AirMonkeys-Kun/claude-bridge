@@ -1,0 +1,15 @@
+﻿=== Windows git HEADs 2026-06-15T01:13:19.1217867+08:00 ===
+--- D:\zebbingo\projects\resonova ---
+  HEAD=94411e2 branch=main dirty=4
+  last: docs+diag: record pool+Kokoro first success and add diagnostic scripts
+--- D:\zebbingo\projects\chatbot-dev ---
+  no .git
+--- D:\zebbingo\projects\chatbot-main ---
+  HEAD=eccab3e branch=codex/sg-deploy-guide dirty=8
+  last: fix: poll SSM Status instead of ResponseCode to wait for completion
+--- D:\zebbingo\projects\chatbot-main-sgtest ---
+  HEAD= branch= dirty=0
+  last: 
+--- D:\zebbingo\projects\stt-test-tool ---
+  no .git
+DONE 2026-06-15T01:13:21.7042309+08:00

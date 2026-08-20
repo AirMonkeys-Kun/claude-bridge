@@ -131,13 +131,40 @@ def agent_needs_restart():
     for its health server to come up; killing it in that window causes a
     restart-loop (supervisor keeps spawning, watchdog keeps reviving).
     """
+    global _agent_unhealthy_streak
     agents = find_procs(["bridge_agent.py"], ["python"])
     if not agents:
         return True
     keep = newest(agents)
     if proc_age(keep) < 60:
         return False
-    return not (agent_healthy() and port_listening(19850))
+    bad = not (agent_ping_ok() and port_listening(19850))
+    if bad:
+        _agent_unhealthy_streak += 1
+        return _agent_unhealthy_streak >= 2
+    _agent_unhealthy_streak = 0
+    return False
+
+
+def agent_ping_ok():
+    """Functional probe: TCP 19850 ping (agent's handle_ping → pong).
+
+    More reliable than the 19851 /health HTTP check: when leftover agents
+    share 19851 (SO_REUSEADDR), the HTTP request can land on a dead one and
+    time out → supervisor restarts a perfectly healthy agent every 30s.
+    TCP ping on 19850 exercises the real command path.
+    """
+    try:
+        import socket
+        s = socket.create_connection(("127.0.0.1", 19850), timeout=3)
+        try:
+            s.sendall(json.dumps({"type": "ping"}).encode("utf-8") + b"\n")
+            line = s.makefile("r").readline()
+            return "pong" in (line or "")
+        finally:
+            s.close()
+    except Exception:
+        return False
 
 
 def port_listening(port):
@@ -237,6 +264,7 @@ def start_watcher():
 _pool_build_pending = False  # async pool rebuild in flight
 _pool_fail_count = 0         # consecutive failed rebuilds
 _pool_backoff_until = 0.0    # epoch: don't rebuild pool until then
+_agent_unhealthy_streak = 0  # consecutive patrols judging agent unhealthy (debounce)
 
 
 def rebuild_pool():

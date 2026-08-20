@@ -74,7 +74,7 @@
 
 ## 五、遗留问题（下一轮）
 
-1. **agent 周期性重启**：单 agent + 功能正常时 supervisor 仍偶发判"不健康"→ 重启（疑似多 agent 抢 19851 的残留干扰；watchdog 复活已修，待长观察确认）。
+1. ~~agent 周期性重启~~ → **已修复（V4.0.1）**：根因是 supervisor 用 19851 /health HTTP 判定健康，多实例抢 19851 端口（SO_REUSEADDR）时请求落到残留实例超时 → 每 30s 误判重启。改为 **TCP 19850 真实 ping（`agent_ping_ok`）+ 连续 2 轮失败才重启（去抖）**。
 2. **worker pipe 在低内存（<3GB）下仍不稳**：runspace 起不来是历史问题；内存宽裕时（~3.2GB）实测 pipe 通道恢复（`channel=pipe`）。
 3. **worker 池反复重建浪费内存**：backoff 已兜底（15min），根治需修 worker pipe runspace 或降低 worker 内存占用。
 

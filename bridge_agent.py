@@ -100,11 +100,77 @@ def _setup_signal_handlers():
 
 # ── Ping handler ──────────────────────────────────────────────────────
 
+def free_mem_gb():
+    """Available physical memory in GB via GlobalMemoryStatusEx (Windows)."""
+    try:
+        import ctypes
+
+        class MEMORYSTATUSEX(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+
+        ms = MEMORYSTATUSEX()
+        ms.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms)):
+            return ms.ullAvailPhys / (1024 ** 3)
+    except Exception:
+        pass
+    return None
+
+
+def probe_worker_pipe(pipe_name, timeout_ms=400):
+    """True if worker's named pipe answers a ping — REAL liveness.
+
+    PID-alive alone lies: a worker process can stay up while its pipe
+    runspace is dead (the "假活" state). This probes the actual pipe.
+    """
+    if not pipe_name:
+        return False
+    try:
+        import win32pipe
+        data = json.dumps({"type": "ping", "cmd_id": "health-probe"}).encode("utf-8")
+        resp = win32pipe.CallNamedPipe(rf"\\.\pipe\{pipe_name}", data, 4096, timeout_ms)
+        text = resp.decode("utf-8", errors="replace")
+        return '"pong"' in text or '"status":"ok"' in text
+    except Exception:
+        return False
+
+
+def collect_worker_stats():
+    """Return (total, pid_alive, pipe_alive, pipe_degraded) for pool workers.
+
+    pipe_degraded = process alive but named pipe unresponsive (假活).
+    """
+    pool = load_worker_pool()
+    workers = pool.get("workers", []) if pool else []
+    pid_alive = 0
+    pipe_alive = 0
+    pipe_degraded = 0
+    for w in workers:
+        if not is_pid_alive(w.get("pid", 0)):
+            continue
+        pid_alive += 1
+        if probe_worker_pipe(w.get("pipe", "")):
+            pipe_alive += 1
+        else:
+            pipe_degraded += 1
+    return len(workers), pid_alive, pipe_alive, pipe_degraded
+
+
 def handle_ping():
     """Return system status for health checks."""
     pool = load_worker_pool()
     workers = pool.get("workers", []) if pool else []
-    alive = sum(1 for w in workers if is_pid_alive(w["pid"]))
+    total, pid_alive, pipe_alive, pipe_degraded = collect_worker_stats()
 
     watcher_alive = False
     hb_file = WATCHER_DIR / ".watcher_heartbeat"
@@ -122,8 +188,10 @@ def handle_ping():
 
     return {
         "type": "pong",
-        "workers_total": len(workers),
-        "workers_alive": alive,
+        "workers_total": total,
+        "workers_alive": pid_alive,
+        "workers_pipe_alive": pipe_alive,
+        "workers_pipe_degraded": pipe_degraded,
         "watcher_alive": watcher_alive,
         "active_connections": active_connections,
         "pipe_mode": pipe_mode,
@@ -215,9 +283,7 @@ class HealthHandler:
     def build(self):
         """Build health response dict."""
         uptime_secs = int(time.time() - _start_time)
-        pool = load_worker_pool()
-        workers = pool.get("workers", []) if pool else []
-        alive_workers = sum(1 for w in workers if is_pid_alive(w["pid"]))
+        total, pid_alive, pipe_alive, pipe_degraded = collect_worker_stats()
 
         watcher_alive = False
         hb_file = WATCHER_DIR / ".watcher_heartbeat"
@@ -238,8 +304,10 @@ class HealthHandler:
             "uptime_secs": uptime_secs,
             "watcher_alive": watcher_alive,
             "watchdog_alive": watchdog_alive,
-            "workers_total": len(workers),
-            "workers_alive": alive_workers,
+            "workers_total": total,
+            "workers_alive": pid_alive,
+            "workers_pipe_alive": pipe_alive,
+            "workers_pipe_degraded": pipe_degraded,
             "active_connections": active_connections,
             "shutting_down": _shutdown_event.is_set(),
         }
@@ -404,6 +472,14 @@ def main():
     log(f"  Thread pool:   {THREAD_POOL_SIZE} workers")
     log(f"  Health HTTP:   0.0.0.0:{HEALTH_PORT}/health")
     log(f"  Watchdog:      bridge_agent_watchdog.py (subprocess)")
+
+    # V3.5 memory guard: report available RAM at startup (worker count is
+    # the worker_factory's job; here we just surface the constraint).
+    mem_gb = free_mem_gb()
+    if mem_gb is not None:
+        log(f"  Free memory:   {mem_gb:.1f} GB")
+        if mem_gb < 1.0:
+            log(f"  [MEM-GUARD] WARNING: free memory <1GB ({mem_gb:.1f}GB) — workers likely cannot start; expect degraded (queue-only) mode.")
 
     reset_queue()
 

@@ -148,15 +148,30 @@ function Invoke-TcpProxyBridge {
     $tcpReq = @{cmd_id=$CmdId; command=$RawCmd; type=$Ctype; timeout=$Timeout} | ConvertTo-Json -Compress
     try {
         $sock = New-Object System.Net.Sockets.TcpClient
-        $sock.Connect("127.0.0.1", 19850)
+        # V3.5.4: BOUNDED connect (2s) + BOUNDED read (3s). A blackholed
+        # bridge_agent must NEVER stall the watcher main loop (queue consumer) —
+        # otherwise the watcher looks alive (heartbeat) but stops consuming
+        # queue.txt ("假活"). On timeout, fall through to subprocess.
+        $connectTask = $sock.ConnectAsync("127.0.0.1", 19850)
+        if (-not $connectTask.Wait(2000)) {
+            try { $sock.Close() } catch {}
+            Log "[$CmdId] TCP-PROXY connect timeout (2s) — falling back"
+            return $false
+        }
         $sw = New-Object System.IO.StreamWriter($sock.GetStream(), $script:utf8)
         $sw.AutoFlush = $true
         $sr = New-Object System.IO.StreamReader($sock.GetStream(), $script:utf8)
 
         $t0 = Get-Date
         $sw.WriteLine($tcpReq)
-        $resp = $sr.ReadLine()
-        $sock.Close()
+        $readTask = $sr.ReadLineAsync()
+        if (-not $readTask.Wait(3000)) {
+            try { $sock.Close() } catch {}
+            Log "[$CmdId] TCP-PROXY read timeout (3s) — falling back"
+            return $false
+        }
+        $resp = $readTask.Result
+        try { $sock.Close() } catch {}
 
         if (-not $resp) { return $false }
         $result = $resp | ConvertFrom-Json

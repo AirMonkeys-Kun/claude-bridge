@@ -361,25 +361,55 @@ def execute_command(cmd):
             backoff = PIPE_RETRY_DELAY * (2 ** attempt)  # 50ms, 100ms, 200ms
             time.sleep(backoff)
 
-    # ── Fallback: queue.txt (serialized write + wait) ─────────────────
-    log(f"  [{cmd_id}] via=queue: {command[:60]}...")
-    pending = {
-        "state": "pending", "cmd_id": cmd_id,
-        "command": command, "type": cmd_type, "timeout": timeout,
-    }
-
-    with queue_serial:
-        if not _write_queue(pending):
-            err = {
-                "state": "error", "cmd_id": cmd_id, "exit_code": -1,
-                "stdout": "", "stderr": "Failed to write queue.txt",
-                "error": "queue_write_failed", "duration_ms": 0,
-                "timestamp": _now_str(),
-            }
-            return err, "failed"
-
-        result = wait_for_result(cmd_id, timeout)
-        return result, "queue"
+    # ── Fallback: LOCAL subprocess (V3.5.5) ───────────────────────────
+    # The agent runs ON the host, so it can execute commands directly.
+    # Bouncing through watcher queue.txt would recurse back into agent TCP
+    # (watcher's TcpProxyBridge forwards queue commands to agent 19850),
+    # forming an infinite loop + queue_serial deadlock. Local subprocess is
+    # the correct degraded path: slow (~150ms-1s) but self-sufficient.
+    log(f"  [{cmd_id}] local-subprocess (worker pool unavailable): {command[:60]}...")
+    import subprocess
+    t0_sub = time.monotonic()
+    try:
+        proc = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            timeout=timeout,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        elapsed = int((time.monotonic() - t0_sub) * 1000)
+        result = {
+            "state": "done" if proc.returncode == 0 else "error",
+            "cmd_id": cmd_id,
+            "exit_code": proc.returncode,
+            "stdout": proc.stdout or "",
+            "stderr": proc.stderr or "",
+            "error": "" if proc.returncode == 0 else f"exit={proc.returncode}",
+            "duration_ms": elapsed,
+            "pipe_direct": False,
+            "timestamp": _now_str(),
+        }
+        log(f"  [{cmd_id}] local-subprocess done exit={proc.returncode} dur={elapsed}ms")
+        return result, "local_subprocess"
+    except subprocess.TimeoutExpired:
+        elapsed = int((time.monotonic() - t0_sub) * 1000)
+        return {
+            "state": "error", "cmd_id": cmd_id, "exit_code": -1,
+            "stdout": "", "stderr": f"[TIMEOUT after {timeout}s]",
+            "error": "timeout", "duration_ms": elapsed,
+            "timestamp": _now_str(),
+        }, "local_subprocess"
+    except Exception as e:
+        elapsed = int((time.monotonic() - t0_sub) * 1000)
+        return {
+            "state": "error", "cmd_id": cmd_id, "exit_code": -1,
+            "stdout": "", "stderr": str(e),
+            "error": "local_subprocess_failed", "duration_ms": elapsed,
+            "timestamp": _now_str(),
+        }, "local_subprocess"
 
 
 # ── Internal helpers ───────────────────────────────────────────────────

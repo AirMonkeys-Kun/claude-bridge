@@ -109,6 +109,13 @@ $script:pipeScriptBlock = {
                 continue
             }
 
+            # Ping support (V3.5): health probes return instantly, nothing executed.
+            if ($cmdObj.type -eq "ping") {
+                $writer.WriteLine('{"status":"ok","type":"pong","pipe":"' + $pn + '"}')
+                $pipe.Close()
+                continue
+            }
+
             $cid = $cmdObj.cmd_id
             $ctype = $cmdObj.type
             $rawCmd = $cmdObj.command
@@ -305,6 +312,11 @@ function Start-PipeRunspace {
     return @{PowerShell=$ps; Handle=$handle}
 }
 $script:pipeRunspace = Start-PipeRunspace
+# V3.5: track start epoch + degraded flag for robust pipe self-heal
+$script:pipeStartEpoch = Get-Date
+$script:pipeLastRecreate = Get-Date
+$script:pipeRecreateCount = 0
+$script:pipeDegraded = $false   # true = pipe runspace cannot stay up → file-mode fallback
 # Wait for pipe runspace to reach Running state (avoids false recreation on first health check)
 for ($i = 0; $i -lt 20; $i++) {
     $st = $script:pipeRunspace.PowerShell.InvokeStateInfo.State
@@ -339,21 +351,60 @@ while ($true) {
     # Heartbeat
     try { WF $script:heartbeatFile (Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff") } catch {}
 
-    # ── Check pipe runspace health ──
-    # Only recreate on Completed/Failed — NOT on NotStarted (still starting up)
-    $pipeState = $script:pipeRunspace.PowerShell.InvokeStateInfo.State
-    if ($pipeState -eq [System.Management.Automation.PSInvocationState]::Completed -or
-        $pipeState -eq [System.Management.Automation.PSInvocationState]::Failed) {
-        Log "Pipe runspace state=$pipeState — recreating..."
-        try { $script:pipeRunspace.PowerShell.Dispose() } catch {}
-        $script:pipeRunspace = Start-PipeRunspace
-        # Wait for new runspace to reach Running state
-        for ($j = 0; $j -lt 20; $j++) {
-            $st = $script:pipeRunspace.PowerShell.InvokeStateInfo.State
-            if ($st -eq [System.Management.Automation.PSInvocationState]::Running) { break }
-            Start-Sleep -Milliseconds 50
+    # ── Check pipe runspace health (V3.5.1: robust self-heal, main-loop protected) ──
+    # Triggers: Completed/Failed (old), Stopped, NotStarted-stuck >15s,
+    #           or pipe name actually missing from system (hard probe).
+    # Cooldown 5s between recreations; after 3 consecutive fails → degraded (file-mode only).
+    # V3.5.1: the WHOLE health-check block is exception-guarded — a failing
+    # Start-PipeRunspace/InvokeStateInfo must NEVER kill the main loop
+    # (that would stop heartbeat + queue consumption = worker 假死).
+    try {
+        try { $pipeState = $script:pipeRunspace.PowerShell.InvokeStateInfo.State } catch { $pipeState = $null }
+        try {
+            $pipeNames = @([System.IO.Directory]::GetFiles("\\.\pipe\"))
+            $pipeExists = $pipeNames -contains $script:pipeName
+        } catch { $pipeExists = $false }
+        $stuckNotStarted = ($pipeState -eq [System.Management.Automation.PSInvocationState]::NotStarted -and
+                            ((Get-Date) - $script:pipeStartEpoch).TotalSeconds -gt 15)
+        $recreateDue = ((Get-Date) - $script:pipeLastRecreate).TotalSeconds -ge 5
+        $needsRecreate = ($pipeState -eq [System.Management.Automation.PSInvocationState]::Completed -or
+                          $pipeState -eq [System.Management.Automation.PSInvocationState]::Failed -or
+                          $pipeState -eq [System.Management.Automation.PSInvocationState]::Stopped -or
+                          $stuckNotStarted -or
+                          (-not $pipeExists -and $pipeState -ne [System.Management.Automation.PSInvocationState]::Running))
+
+        if ($needsRecreate -and $recreateDue -and -not $script:pipeDegraded) {
+            Log "Pipe runspace state=$pipeState pipeExists=$pipeExists — recreating (#$($script:pipeRecreateCount+1))..."
+            try { $script:pipeRunspace.PowerShell.Dispose() } catch {}
+            $script:pipeRunspace = Start-PipeRunspace
+            $script:pipeStartEpoch = Get-Date
+            $script:pipeLastRecreate = Get-Date
+            $script:pipeRecreateCount++
+            # Wait for new runspace to reach Running state
+            $reachedRunning = $false
+            for ($j = 0; $j -lt 20; $j++) {
+                try { $st = $script:pipeRunspace.PowerShell.InvokeStateInfo.State } catch { $st = $null }
+                if ($st -eq [System.Management.Automation.PSInvocationState]::Running) {
+                    $reachedRunning = $true
+                    # Hard probe: pipe name must actually appear in the system
+                    Start-Sleep -Milliseconds 300
+                    try { $pl = @([System.IO.Directory]::GetFiles("\\.\pipe\")); $reachedRunning = $pl -contains $script:pipeName } catch { $reachedRunning = $false }
+                    break
+                }
+                Start-Sleep -Milliseconds 50
+            }
+            if (-not $reachedRunning) {
+                Log "Pipe runspace failed to start (attempt #$($script:pipeRecreateCount)) — will retry after cooldown"
+            }
+            if ($script:pipeRecreateCount -ge 3) {
+                $script:pipeDegraded = $true
+                Log "PIPE DEGRADED after $($script:pipeRecreateCount) failed recreations — switching to file-mode (queue.txt) only. Worker stays alive."
+            }
+            try { $afterState = $script:pipeRunspace.PowerShell.InvokeStateInfo.State } catch { $afterState = $null }
+            Log "Pipe runspace state after recreate: $afterState (degraded=$($script:pipeDegraded))"
         }
-        Log "Pipe runspace recreated (state=$($script:pipeRunspace.PowerShell.InvokeStateInfo.State))"
+    } catch {
+        Log "PIPE-HEALTH guard caught: $($_.Exception.Message) — main loop continues"
     }
 
     # FSW: blocks until queue.txt changed OR 500ms heartbeat timeout

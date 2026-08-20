@@ -46,6 +46,9 @@ RESTART_BACKOFF_BASE = 2
 RESTART_MAX_BACKOFF = 30
 WATCHDOG_LOG_MAX_BYTES = 1 * 1024 * 1024
 
+# ── Restarter concurrency guard (prevents process accumulation) ──
+_restarter_pid = None  # PID of the last launched restarter; None if none active
+
 
 def _now_str():
     """strftime-free timestamp — works around broken strftime on some Python builds."""
@@ -115,6 +118,42 @@ def is_watcher_alive():
         return False
 
 
+def get_watcher_pid():
+    """Read the watcher PID from .watcher.lock (written by watcher.ps1)."""
+    try:
+        raw = LOCK_FILE.read_text("utf-8").strip()
+        return int(raw) if raw.isdigit() else None
+    except (OSError, ValueError):
+        return None
+
+
+def is_restarter_alive():
+    """Check if the last launched restarter process is still running."""
+    global _restarter_pid
+    if _restarter_pid is None:
+        return False
+    if is_process_alive(_restarter_pid):
+        return True
+    _restarter_pid = None
+    return False
+
+
+def is_supervisor_active():
+    """True if bridge_supervisor is running (heartbeat fresh <60s).
+
+    When the supervisor is managing the bridge, the watchdog must NOT
+    resurrect agents/watchers on its own — that fights the supervisor's
+    reap/revive and causes the agent restart-loop (supervisor spawns,
+    watchdog respawns, supervisor reaps...). Watchdog becomes fallback-only
+    (covers the case where the supervisor itself is dead).
+    """
+    try:
+        hb = WATCHER_DIR / ".supervisor_heartbeat"
+        return (time.time() - hb.stat().st_mtime) < 60
+    except OSError:
+        return False
+
+
 def is_maintenance_locked():
     """Check if maintenance lock exists and hasn't expired (TTL default 1800s)."""
     try:
@@ -140,8 +179,15 @@ def is_maintenance_locked():
 
 
 def launch_restarter():
+    global _restarter_pid
+    if is_supervisor_active():
+        log("[WATCHDOG] supervisor 存活中 — 交由 supervisor 接管，跳过 watcher 重启")
+        return
     if is_maintenance_locked():
         log("[WATCHDOG] Maintenance lock active — skipping watcher restart")
+        return
+    if is_restarter_alive():
+        log(f"[WATCHDOG] Restarter PID={_restarter_pid} still running — skipping (prevents process accumulation)")
         return
     log("[WATCHDOG] Watcher heartbeat stale - initiating restart")
     try:
@@ -150,14 +196,18 @@ def launch_restarter():
             log("  Removed stale .watcher.lock")
     except OSError as e:
         log(f"  Could not remove lock: {e}")
+    old_watcher_pid = get_watcher_pid()
+    old_pid_str = str(old_watcher_pid) if old_watcher_pid else "0"
+    log(f"  Old watcher PID from lock: {old_pid_str}")
     if RESTARTER.exists():
         try:
             proc = subprocess.Popen(
                 ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
-                 "-File", str(RESTARTER), "-OldPID", "0", "-WatcherPath", str(WATCHER_PS1)],
+                 "-File", str(RESTARTER), "-OldPID", old_pid_str, "-WatcherPath", str(WATCHER_PS1)],
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
-            log(f"  Launched restarter PID={proc.pid}")
+            _restarter_pid = proc.pid
+            log(f"  Launched restarter PID={proc.pid} (old_watcher={old_pid_str})")
         except Exception as e:
             log(f"  Failed to launch restarter: {e}")
     elif WATCHER_PS1.exists():
@@ -173,6 +223,9 @@ def launch_restarter():
 
 
 def launch_bridge_agent():
+    if is_supervisor_active():
+        log("[WATCHDOG] supervisor 存活中 — 交由 supervisor 接管，跳过 agent 重启")
+        return None
     if is_maintenance_locked():
         log("[WATCHDOG] Maintenance lock active — skipping bridge_agent restart")
         return None
@@ -192,6 +245,72 @@ def launch_bridge_agent():
         return None
 
 
+def cleanup_zombie_processes():
+    """Kill all stale bridge processes (watcher/workers/restarters) on startup.
+
+    Reads PIDs from .lock files in watcher/ and cluster/*/ directories.
+    This prevents process accumulation from previous buggy watchdog cycles
+    where restarters launched without killing old watchers (OldPID=0).
+    """
+    import ctypes
+    killed = 0
+    pids_seen = set()
+
+    # Collect PIDs from all lock files
+    lock_files = [LOCK_FILE]  # watcher/.watcher.lock
+    try:
+        for d in WATCHER_DIR.iterdir():
+            if d.is_dir():
+                lf = d / ".lock"
+                if lf.exists():
+                    lock_files.append(lf)
+    except OSError:
+        pass
+    try:
+        cluster_dir = SCRIPT_DIR / "cluster"
+        if cluster_dir.exists():
+            for d in cluster_dir.iterdir():
+                if d.is_dir():
+                    for lock_name in [".watcher.lock", ".lock"]:
+                        lf = d / lock_name
+                        if lf.exists():
+                            lock_files.append(lf)
+    except OSError:
+        pass
+
+    for lf in lock_files:
+        try:
+            raw = lf.read_text("utf-8").strip()
+            if raw.isdigit():
+                pid = int(raw)
+                if pid in pids_seen or pid == os.getpid():
+                    continue
+                pids_seen.add(pid)
+                # Try to kill
+                kernel32 = ctypes.windll.kernel32
+                PROCESS_TERMINATE = 0x0001
+                handle = kernel32.OpenProcess(PROCESS_TERMINATE, False, pid)
+                if handle:
+                    kernel32.TerminateProcess(handle, 1)
+                    kernel32.CloseHandle(handle)
+                    killed += 1
+                    log(f"  Killed zombie PID={pid} (from {lf.parent.name}/{lf.name})")
+        except (OSError, ValueError):
+            pass
+
+    # Clean up all lock files after killing
+    for lf in lock_files:
+        try:
+            lf.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    if killed > 0:
+        log(f"[CLEANUP] Killed {killed} zombie bridge processes on startup")
+    else:
+        log("[CLEANUP] No zombie processes found")
+
+
 def main():
     parser = argparse.ArgumentParser(description="bridge_agent watchdog subprocess")
     parser.add_argument("--parent-pid", type=int, required=True, help="PID of the parent bridge_agent process")
@@ -203,6 +322,13 @@ def main():
     log(f"  Script dir:  {SCRIPT_DIR}")
     log(f"  Watcher dir: {WATCHER_DIR}")
     log(f"  Log file:    {LOG_FILE}")
+
+    # Clean up zombie processes from previous buggy watchdog cycles
+    cleanup_zombie_processes()
+
+    # Hot-reload: exit if this script file was modified (bridge_agent will respawn with new code)
+    _script_mtime_at_start = Path(__file__).resolve().stat().st_mtime
+
     restart_count = 0
     last_watcher_recovery = 0
     last_parent_check = 0
@@ -214,6 +340,15 @@ def main():
     log(f"  Initial state: watcher_alive={watcher_was_alive} parent_alive={parent_was_alive}")
     while True:
         try:
+            # Hot-reload: exit if script file was modified (bridge_agent respawns with new code)
+            try:
+                current_mtime = Path(__file__).resolve().stat().st_mtime
+                if current_mtime != _script_mtime_at_start:
+                    log(f"[HOT-RELOAD] Script file modified (was {_script_mtime_at_start}, now {current_mtime}) — exiting for respawn")
+                    sys.exit(0)
+            except OSError:
+                pass
+
             now = time.monotonic()
             if now - last_heartbeat >= HEARTBEAT_INTERVAL:
                 write_heartbeat()

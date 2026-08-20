@@ -1,4 +1,4 @@
-#Requires -Version 5.0
+﻿#Requires -Version 5.0
 <#
  worker_factory.ps1 — Typed worker factory (V2.2)
  ────────────────
@@ -47,6 +47,32 @@ $poolFile = Join-Path $clusterDir ".worker_pool.json"
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
 function Log($m) { Write-Host "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') | [FACTORY] $m" }
+
+# ── Memory guard (V2.3): adapt worker count to available RAM ──
+function Get-FreeMemGB {
+    try {
+        $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+        if ($os) { return [math]::Round($os.FreePhysicalMemory / 1MB, 1) }
+    } catch {}
+    return 99.0  # 查询失败不设限（保守放行，避免误杀可用环境）
+}
+
+function Get-AdaptivePlan($freeGB) {
+    # 内存护栏：宁可少干活，不许装死。按可用内存降级 worker 数量。
+    if ($freeGB -lt 1.0) { return $null }  # <1GB: fail-fast，不硬建
+    if ($freeGB -lt 2.0) { return @(@{type="generic";count=1}, @{type="file";count=1}) }
+    if ($freeGB -lt 3.0) { return @(@{type="generic";count=2}, @{type="file";count=1}) }
+    if ($freeGB -lt 5.0) { return @(@{type="generic";count=4}, @{type="file";count=2}, @{type="process";count=1}) }
+    return @(@{type="generic";count=6}, @{type="file";count=4}, @{type="process";count=2}, @{type="system";count=2}, @{type="user";count=1})
+}
+
+function Assert-MemGuard($freeGB) {
+    if ($null -eq $freeGB -or $freeGB -lt 1.0) {
+        Log "MEM-GUARD: 可用内存仅 ${freeGB}GB (<1GB) — fail-fast，拒绝创建 worker（避免假活/被杀）"
+        return $false
+    }
+    return $true
+}
 
 # ── Read pool helper ──
 function Read-Pool {
@@ -107,7 +133,10 @@ if ($KillAll) {
 
 # ── DeployAll mode ──
 if ($DeployAll) {
-    Log "=== DeployAll: creating 14 workers across 6 types, atomic pool write ==="
+    # V2.3: memory-adaptive deploy
+    $freeGB = Get-FreeMemGB
+    if (-not (Assert-MemGuard $freeGB)) { return }
+    Log "=== DeployAll: 可用内存 ${freeGB}GB，按内存护栏调整 worker 数量 ==="
 
     # Read config if -FromConfig specified
     $configFile = Join-Path $clusterDir "worker-config.json"
@@ -120,15 +149,10 @@ if ($DeployAll) {
         }
         Log "  Loaded $($deployPlan.Count) types from config"
     } else {
-        # Hardcoded fallback (original behavior)
-        Log "Using hardcoded deploy plan (use -FromConfig to read worker-config.json)"
-        $deployPlan = @(
-            @{type="generic"; count=6},
-            @{type="file"; count=4},
-            @{type="process"; count=2},
-            @{type="system"; count=2},
-            @{type="user"; count=1}
-        )
+        # Memory-adaptive plan (V2.3): full plan only when RAM allows
+        $deployPlan = Get-AdaptivePlan $freeGB
+        $totalPlan = ($deployPlan | Measure-Object -Property count -Sum).Sum
+        Log "Using memory-adaptive deploy plan (${freeGB}GB free → $totalPlan workers)"
     }
 
     $allWorkers = @()
@@ -209,6 +233,19 @@ if (-not $Type) {
 if ($Count -le 0) {
     Log "ERROR: -Count must be > 0"
     exit 1
+}
+
+# ── V2.3 memory guard for single-type create ──
+$freeGB = Get-FreeMemGB
+if (-not (Assert-MemGuard $freeGB)) { exit 1 }
+$adaptivePlan = Get-AdaptivePlan $freeGB
+$maxForType = 1
+foreach ($item in $adaptivePlan) {
+    if ($item.type -eq $Type) { $maxForType = $item.count; break }
+}
+if ($Count -gt $maxForType) {
+    Log "MEM-GUARD: 可用内存 ${freeGB}GB，'$Type' 最多建 $maxForType 个（请求 $Count），已截断"
+    $Count = $maxForType
 }
 
 # ── Create typed workers ──

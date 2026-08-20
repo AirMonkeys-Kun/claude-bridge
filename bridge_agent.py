@@ -315,18 +315,29 @@ class HealthHandler:
     def serve(self):
         """Run a simple HTTP server on HEALTH_PORT serving /health."""
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # V4.0.2: NO SO_REUSEADDR — exclusive bind. With reuseaddr, leftover
-        # agents share the port and health probes land on dead instances
-        # (false "unhealthy" → supervisor restart-loop). Exclusive bind makes
-        # a second agent fail to start instead of silently sharing.
-        try:
-            srv.bind(("0.0.0.0", HEALTH_PORT))
-            srv.listen(5)
-            srv.settimeout(1.0)
-            log(f"  Health HTTP:    0.0.0.0:{HEALTH_PORT}/health")
-        except OSError as e:
-            log(f"  Health HTTP:    FAILED to bind port {HEALTH_PORT}: {e}")
+        # V4.0.2: NO SO_REUSEADDR — exclusive bind (see main server note).
+        # V4.0.3: retry the bind. After supervisor reaps a stale agent, the OS
+        # may keep 19851 in TIME_WAIT (up to ~4 min on Windows), so a single
+        # bind attempt fails and the health endpoint stays dead for the agent's
+        # whole lifetime. Retry (up to ~4 min) so it comes up once the port frees.
+        _ok = False
+        _err = None
+        for _attempt in range(1, 241):
+            try:
+                srv.bind(("0.0.0.0", HEALTH_PORT))
+                _ok = True
+                break
+            except OSError as e:
+                _err = e
+                if _attempt == 1:
+                    log(f"  Health HTTP: port {HEALTH_PORT} 暂忙，重试中（旧实例 TIME_WAIT）...")
+                time.sleep(1)
+        if not _ok:
+            log(f"  Health HTTP: FAILED to bind {HEALTH_PORT} after retries: {_err}")
             return
+        srv.listen(5)
+        srv.settimeout(1.0)
+        log(f"  Health HTTP:    0.0.0.0:{HEALTH_PORT}/health")
 
         while not _shutdown_event.is_set():
             try:
@@ -501,8 +512,28 @@ def main():
 
     # ── Main TCP server ──────────────────────────────────────────────
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # V4.0.2: exclusive bind (no SO_REUSEADDR) — see HealthHandler.serve note
-    srv.bind(("0.0.0.0", port))
+    # V4.0.2: exclusive bind (no SO_REUSEADDR) — see HealthHandler.serve note.
+    # V4.0.3: retry the bind for a LONG window. After supervisor reaps a stale
+    # agent, Windows keeps the port in TIME_WAIT for up to ~4 min; a short
+    # retry + sys.exit would crash-loop the agent until TIME_WAIT clears
+    # (the "Main TCP: FATAL" crash at 13:45:17 was exactly this). Match the
+    # health server: retry ~240s, never exit prematurely — one agent rides out
+    # TIME_WAIT and binds the instant the port frees, so recovery is automatic.
+    _bind_ok = False
+    _bind_err = None
+    for _attempt in range(1, 241):
+        try:
+            srv.bind(("0.0.0.0", port))
+            _bind_ok = True
+            break
+        except OSError as e:
+            _bind_err = e
+            if _attempt == 1:
+                log(f"  Main TCP: port {port} 暂忙，重试中（旧实例 TIME_WAIT，最多等 ~4min）...")
+            time.sleep(1)
+    if not _bind_ok:
+        log(f"  Main TCP: FATAL 重试 240s 后仍无法绑定 {port}（可能被其他程序占用）: {_bind_err}")
+        sys.exit(1)
     srv.listen(MAX_CONCURRENT)
     srv.settimeout(1.0)  # allow periodic shutdown check
 

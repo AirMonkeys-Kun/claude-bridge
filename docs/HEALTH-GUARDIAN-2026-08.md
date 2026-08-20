@@ -1,8 +1,8 @@
 # 2026-08-19/20 桥健康加固与守护层（排障记录 + 变更说明）
 
-> 时间：2026-08-19 23:50 ~ 2026-08-20 10:56
-> 范围：TCP 黑洞 / worker 假活 / watcher 假活 / agent 执行卡死 全面排障 + 6 项加固 + supervisor 守护层
-> 状态：核心可用（TCP 命令 180-900ms 响应），遗留见文末
+> 时间：2026-08-19 23:50 ~ 2026-08-20 14:00（含 V4.0.1 / V4.0.2 / V4.0.3 三轮修复）
+> 范围：TCP 黑洞 / worker 假活 / watcher 假活 / agent 执行卡死 全面排障 + 6 项加固 + supervisor 守护层 + 端口独占 + 启动加固 + 日志轮转 + 开机自启
+> 状态：稳定可用（agent PID 5 分钟零变化，TCP 命令 180ms 响应），30s 重启循环已断根（V4.0.2）
 
 ---
 
@@ -72,13 +72,41 @@
 - **health 200 / 进程存活 ≠ 功能正常**：worker/watcher 的"假活"骗得过 PID 检查，必须功能探测。
 - **PowerShell 5.1 读 UTF-8 无 BOM 中文脚本会乱码报错**：改含中文的 .ps1 必须带 BOM。
 
-## 五、遗留问题（下一轮）
+## 五、遗留问题（含后续修复）
 
-1. ~~agent 周期性重启~~ → **已修复（V4.0.1）**：根因是 supervisor 用 19851 /health HTTP 判定健康，多实例抢 19851 端口（SO_REUSEADDR）时请求落到残留实例超时 → 每 30s 误判重启。改为 **TCP 19850 真实 ping（`agent_ping_ok`）+ 连续 2 轮失败才重启（去抖）**。
-2. **worker pipe 在低内存（<3GB）下仍不稳**：runspace 起不来是历史问题；内存宽裕时（~3.2GB）实测 pipe 通道恢复（`channel=pipe`）。
+1. **agent 周期性重启（30s 循环）** —— 这是本轮最阴险的问题，修了三轮才断根：
+   - **V4.0.1（部分缓解）**：supervisor 改用心跳/健康判定改用 **TCP 19850 真实 ping（`agent_ping_ok`）+ 连续 2 轮失败才重启（去抖）**，把"误判频率"从每 30s 降下来，但**没断根**——只要多实例还能共享端口，探测仍会偶尔落到残留实例。
+   - **V4.0.2（真正根因修复）**：根因是 **Windows `SO_REUSEADDR` 语义与 Linux 不同**——它允许多个进程绑同一个端口。残留旧 agent 会**吞掉健康探测的连接** → supervisor 误判"不健康" → 拉起新 agent → 又抢端口 → 死循环。修法：`bridge_agent.py` 的 19850/19851 两处**去掉 SO_REUSEADDR（独占绑定）**，第二个实例直接启动失败，不再静默抢端口；supervisor `start_agent` 拉起前先 `reap_agents()` + 等 2s 释放端口。**实测 agent PID 5 分钟零变化，循环终结。**
+   - **V4.0.3（防回归加固）**：独占绑定后暴露一个新隐患——`start_agent` 先杀旧 agent 再启动新 agent，若旧端口处于 Windows **TIME_WAIT**，新 agent 的 `srv.bind(19850)` 会**硬失败并直接崩掉整个 agent**，反而造出新重启循环。修法：主 TCP 服务器 bind 加 **最多 20 次、每次 0.5s 的重试**（参见 `bridge_agent.py` main）。
+2. **worker pipe 在低内存（<3GB）下仍不稳**：runspace 起不来是 8/17 后的历史问题；内存宽裕时（~3.2GB）实测 pipe 通道恢复（`channel=pipe`）。V4.0.3 把 supervisor 的 worker 池重建门槛从 `<1GB` 提到 **`<2.5GB` 才跳过重建**，避免低内存下无意义反复重建（agent 本地兜底即可）。
 3. **worker 池反复重建浪费内存**：backoff 已兜底（15min），根治需修 worker pipe runspace 或降低 worker 内存占用。
 
 ## 六、变更文件清单
 
-修改：`bridge_agent.py`、`bridge_agent/dispatch.py`、`bridge_agent_watchdog.py`、`cluster/worker_factory.ps1`、`cluster/worker_generic.ps1`、`watcher/handlers/execution.ps1`
-新增：`bridge_supervisor.py`、`start_supervisor.bat`
+修改：`bridge_agent.py`、`bridge_agent/dispatch.py`、`bridge_agent_watchdog.py`、`cluster/worker_factory.ps1`、`cluster/worker_generic.ps1`、`watcher/handlers/execution.ps1`、`bridge_supervisor.py`
+新增：`bridge_supervisor.py`、`start_supervisor.bat`、`install_autostart.ps1`
+
+## 七、V4.0.3 优化举措（本轮追加）
+
+> 这轮在 V4.0.2 稳定后，又梳理并落地的 4 项优化，全部已提交推送。
+
+1. **agent 重启不再崩循环（TIME_WAIT 双保险）** —— 这是 V4.0.2 独占绑定后暴露出的新坑：Windows 端口在进程死后进入 **TIME_WAIT（最长约 4 分钟）**，新 agent 起步若直接 bind 会失败。若 supervisor 立刻拉起→崩→再拉，就形成**新的重启循环**（实测 13:45 的 `Main TCP: FATAL 重试后仍无法绑定 19850` + 13:51-13:53 每 36 秒崩一次）。两道修复：
+   - **agent 主端口 bind 重试 240×1s（不提前退）**：单个 agent 自己熬过 TIME_WAIT，端口一释放就绑定，自动恢复（`bridge_agent.py` main + `HealthHandler.serve` 一致）。
+   - **supervisor 拉起前先 `port_free(19850)` 探测**：端口未释放（TIME_WAIT 中）则本轮回跳、下轮再试，**绝不生出注定崩的 agent**——彻底消除 churn（新 supervisor 实测生命周期内 spawn=0，只打"延迟拉起"日志）。
+   - 权衡：agent 崩溃后恢复最多等 ~4 分钟（TIME_WAIT），但**全自动、无 churn、无崩溃日志**。这是独占绑定下不可避免的代价，远好于手动干预。
+2. **supervisor 日志轮转** —— `log()` 每次写前检查，超过 **2MB 自动 rename 为 `.log.1`**（保留 1 份备份）。此前 supervisor 每 15s 写一行，几个 log 已各涨到 ~800KB 且无限增长，现在封顶。
+3. **worker 池重建内存门槛提高到 2.5GB** —— 低内存（<2.5GB）下 pipe runspace 起不来，重建纯属浪费；agent 本地 `subprocess` 兜底已够用，跳过重建。
+4. **开机自启（登录后自动托管）** —— 新增 `install_autostart.ps1`，用 PowerShell 原生 `Register-ScheduledTask` 注册计划任务 **`ClaudeBridgeSupervisor`**：`AtLogOn` + 延迟 1 分钟，以 Highest 权限拉起 `bridge_supervisor.py`。解决"电脑重启后守护层不在"的问题。**需管理员运行该脚本**，本会话未替你执行（属系统级改动，你确认后再跑）。
+
+   ```powershell
+   # 以管理员身份运行，注册自启
+   powershell -ExecutionPolicy Bypass -File D:\zebbingo\tools\claude-bridge\install_autostart.ps1
+   # 卸载
+   Unregister-ScheduledTask -TaskName "ClaudeBridgeSupervisor" -Confirm:$false
+   ```
+
+## 八、待办 / 展望（非紧急）
+
+1. **worker pipe runspace 8/17 回归**：低内存时 NamedPipeServerStream 起不来是历史包袱。根治 = 修 runspace 或降低单 worker 内存占用（每 worker ~85MB powershell）。当前不影响使用（agent 本地兜底）。
+2. **supervisor 仅在本会话后台进程存活**：当前靠 `start_supervisor.bat` 起的进程守着。装了上面计划任务后，重启可自动恢复；但本会话若被强关，需手动重开 bat 或等下次登录。
+3. **日志轮转目前只覆盖 supervisor**：agent / watchdog 的 stdout 日志（`bridge_agent_stdout.log` 等）仍可能无限增长，后续可给它们也加轮转（或改 agent 自带 logger 接 size-rotating）。

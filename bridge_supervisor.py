@@ -41,10 +41,33 @@ START_TIMES = {}           # component -> [recent start timestamps]
 BACKOFF_UNTIL = {}         # component -> epoch (backoff until)
 
 
+def _maybe_rotate_log():
+    """Rotate the supervisor log at 2MB, keeping one .log.1 backup.
+
+    The patrol writes every 15s forever; without rotation the log grows
+    unbounded (was already ~780KB). Keep it bounded and diagnosable.
+    """
+    try:
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size > 2 * 1024 * 1024:
+            backup = LOG_FILE.with_name(LOG_FILE.name + ".1")
+            try:
+                if backup.exists():
+                    backup.unlink()
+            except OSError:
+                pass
+            try:
+                LOG_FILE.rename(backup)
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
 def log(msg):
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{ts}] [SUPERVISOR] {msg}\n"
     try:
+        _maybe_rotate_log()
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(line)
     except OSError:
@@ -178,6 +201,26 @@ def port_listening(port):
     return False
 
 
+def port_free(port):
+    """True if we can exclusively bind `port` right now (no live listener,
+    no TIME_WAIT blocking). On Windows a plain bind fails while the port is in
+    TIME_WAIT (up to ~4 min after a process dies), so this reliably detects
+    the 'old agent just reaped, port not yet released' case.
+
+    Used by start_agent: if the port isn't free we skip spawning this round
+    instead of launching an agent that would crash-loop on the TIME_WAIT port.
+    A never-connected socket closed immediately does NOT enter TIME_WAIT.
+    """
+    import socket as _sock
+    try:
+        s = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
+        s.bind(("0.0.0.0", port))
+        s.close()
+        return True
+    except OSError:
+        return False
+
+
 def watcher_healthy():
     hb = WATCHER / ".watcher_heartbeat"
     try:
@@ -234,6 +277,15 @@ def start_agent():
     # process would make the fresh one fail to bind → silent crash loop.
     reap_agents()
     time.sleep(2)
+    # V4.0.3: don't spawn a doomed agent. Right after reaping the old agent,
+    # 19850 is in TIME_WAIT (~4 min on Windows); spawning now makes the fresh
+    # agent crash-loop until the OS releases the port, and the supervisor then
+    # "helps" by killing+respawning it every ~90s (observed churn). Probe first:
+    # if the port isn't free, skip this round and let the next patrol retry once
+    # TIME_WAIT clears — the spawn then binds instantly, zero churn.
+    if not port_free(19850):
+        log("接管: 19850 端口未释放（TIME_WAIT），延迟拉起 agent（下轮重试）")
+        return False
     try:
         subprocess.Popen(
             [sys.executable, str(BASE / "bridge_agent.py")],
@@ -469,8 +521,8 @@ def main():
                 log("巡检: worker 池重建中（worker_factory 运行中，跳过）")
             elif time.time() < _pool_backoff_until:
                 log(f"巡检: worker 池在 backoff 中（至 {time.strftime('%H:%M:%S', time.localtime(_pool_backoff_until))}）")
-            elif free_mem_gb() < 1.0:
-                log("巡检: 内存 <1GB，跳过 worker 池（护栏）")
+            elif free_mem_gb() < 2.5:
+                log("巡检: 内存 <2.5GB，跳过 worker 池重建（护栏：低内存 pipe 起不来，agent 本地兜底即可）")
             elif not pool:
                 log("巡检: worker 池为空 → 重建")
                 rebuild_pool()

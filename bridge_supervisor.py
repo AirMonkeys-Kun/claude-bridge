@@ -229,6 +229,11 @@ def note_start(comp):
 def start_agent():
     if not allowed_to_start("agent"):
         return False
+    # V4.0.2: reap existing agents FIRST, then wait for the port to release.
+    # Agent now binds 19850/19851 exclusively (no SO_REUSEADDR), so a stale
+    # process would make the fresh one fail to bind → silent crash loop.
+    reap_agents()
+    time.sleep(2)
     try:
         subprocess.Popen(
             [sys.executable, str(BASE / "bridge_agent.py")],

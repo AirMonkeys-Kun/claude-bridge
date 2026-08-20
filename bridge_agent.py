@@ -315,7 +315,10 @@ class HealthHandler:
     def serve(self):
         """Run a simple HTTP server on HEALTH_PORT serving /health."""
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # V4.0.2: NO SO_REUSEADDR — exclusive bind. With reuseaddr, leftover
+        # agents share the port and health probes land on dead instances
+        # (false "unhealthy" → supervisor restart-loop). Exclusive bind makes
+        # a second agent fail to start instead of silently sharing.
         try:
             srv.bind(("0.0.0.0", HEALTH_PORT))
             srv.listen(5)
@@ -498,7 +501,7 @@ def main():
 
     # ── Main TCP server ──────────────────────────────────────────────
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    # V4.0.2: exclusive bind (no SO_REUSEADDR) — see HealthHandler.serve note
     srv.bind(("0.0.0.0", port))
     srv.listen(MAX_CONCURRENT)
     srv.settimeout(1.0)  # allow periodic shutdown check
